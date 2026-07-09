@@ -16,7 +16,7 @@
 ## 技术栈
 
 - Frontend：Vue 3 + TypeScript + Vite + Pinia + Vue Router + Element Plus
-- Backend：Python + FastAPI + LangChain
+- Backend：Python + uv + FastAPI + LangChain
 - Database：PostgreSQL + pgvector
 - LLM：OpenAI-compatible API
 
@@ -29,12 +29,52 @@
 - 确定项目方向。
 - 确定技术栈。
 - 建立项目规范、路线图和说明文档。
+- 创建 FastAPI 后端最小骨架和 `/health` 接口。
 
 下一步：
 
-- 初始化 FastAPI 后端。
-- 添加 /health 接口。
+- 使用 uv 同步后端依赖，并运行后端验证。
 - 添加 PostgreSQL + pgvector 本地开发环境。
+
+## 后端启动
+
+如果本机还没有安装 `uv`，先在 PowerShell 执行：
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+检查 `uv` 是否可用：
+
+```bash
+uv --version
+```
+
+进入后端目录：
+
+```bash
+cd backend
+```
+
+同步依赖，包含测试用的 `dev` 依赖：
+
+```bash
+uv sync --extra dev
+```
+
+运行测试：
+
+```bash
+uv run pytest
+```
+
+启动接口服务：
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+注意：本项目后端统一使用 `uv run` 执行项目环境里的命令，不直接运行 `uvicorn ...`，也不使用 `pip install -e ".[dev]"` 作为默认安装方式。
 
 ## 学习重点
 

@@ -1,0 +1,34 @@
+# 这个文件告诉 Git：哪些本地文件不要提交到仓库。
+# 规则通常是一行一个路径或匹配模式。
+
+# Python 运行时会自动生成缓存文件，这些文件可以重新生成，不需要提交。
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# 前端依赖和构建结果体积大，也可以通过安装或构建命令重新生成。
+node_modules/
+dist/
+
+# 环境变量文件里通常会放 API Key、数据库密码等敏感信息，不能提交。
+.env
+.env.*
+!.env.example
+
+# 测试覆盖率、构建缓存和报告文件属于本地临时产物。
+build/
+.coverage
+htmlcov/
+
+# 操作系统和编辑器自动生成的本地配置，不属于项目源码。
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Codex / Agents 的本地状态目录，只在当前机器使用，不提交。
+.codex/
+.agents/

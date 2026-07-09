@@ -1,0 +1,40 @@
+# pyproject.toml 是 Python 项目的标准配置文件。
+# 它可以声明项目名称、Python 版本、依赖包和工具配置。
+
+[project]
+# 项目包名，只用于 Python 包管理，不一定等于仓库名。
+name = "enterprise-knowledge-base-rag-backend"
+
+# 当前后端版本。初始阶段从 0.1.0 开始。
+version = "0.1.0"
+
+# 项目描述，方便工具或包管理器展示。
+description = "FastAPI backend for an enterprise knowledge base RAG project."
+
+# 限制 Python 版本。这里使用 3.11+，后续类型语法和依赖兼容性更稳定。
+requires-python = ">=3.11"
+
+# 运行项目必须安装的依赖。
+dependencies = [
+    # FastAPI 是后端 Web 框架，用来声明接口、参数和响应。
+    "fastapi>=0.128.0,<1.0.0",
+
+    # uvicorn 是 ASGI 服务，用来把 FastAPI 应用真正跑起来。
+    # [standard] 会额外安装一些常用性能和开发依赖。
+    "uvicorn[standard]>=0.30.0,<1.0.0",
+]
+
+[project.optional-dependencies]
+# dev 是开发依赖分组。只有本地开发、测试时才需要安装。
+dev = [
+    # FastAPI 的 TestClient 底层会用到 httpx 来模拟 HTTP 请求。
+    "httpx>=0.27.0,<1.0.0",
+
+    # pytest 是 Python 常用测试框架。
+    "pytest>=8.0.0,<9.0.0",
+]
+
+[tool.pytest.ini_options]
+# pytest 默认只扫描 tests 目录，避免误扫其它文件。
+testpaths = ["tests"]
+pythonpath = ["."]

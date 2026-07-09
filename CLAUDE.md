@@ -26,6 +26,7 @@
 ### Backend
 
 - Python
+- uv
 - FastAPI
 - LangChain
 - SQLAlchemy
@@ -58,6 +59,7 @@
 │   │   └── main.py
 │   ├── tests/
 │   ├── pyproject.toml
+│   ├── uv.lock
 │   └── README.md
 ├── frontend/
 │   ├── src/
@@ -80,6 +82,7 @@
 - 每个阶段只做能验证的最小闭环。
 - 先跑通主链路，再补复杂能力。
 - 不引入当前阶段用不到的抽象、依赖和配置项。
+- 后端统一使用 uv 管理 Python 依赖和运行命令，不使用 pip 作为项目默认安装方式。
 - 所有代码改动必须对应 ROADMAP.md 中的阶段目标。
 - 完成开发、修复、文档补齐或重要调研后，同步更新 ROADMAP.md。
 - 涉及数据库 schema、环境变量、密钥、CI/CD、发布部署前必须先确认。
