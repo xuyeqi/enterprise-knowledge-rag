@@ -13,19 +13,16 @@
 - 2026-07-09：补充项目规范文档、路线图和项目说明。
 - 2026-07-09：补充第二步后端骨架的新手向文件说明和代码注释。
 - 2026-07-09：统一后端依赖管理方式为 uv，并修正安装、测试和启动命令文档。
+- 2026-07-09：完成后端最小骨架，包含 FastAPI 应用、`/health` 接口和健康检查测试；已通过 `uv run pytest` 验证。
 
 ## 进行中
 
 - 阶段 1：项目初始化。
-- 后端最小骨架已落地，运行验证待 Python 环境就绪后完成。
 
 ## 待办
 
 ### 阶段 1：项目初始化
 
-- 创建 backend 目录。（已实现，待运行验证）
-- 初始化 FastAPI 应用。（已实现，待运行验证）
-- 添加 /health 接口。（已实现，待运行验证）
 - 添加 docker-compose.yml，启动 PostgreSQL + pgvector。
 - 添加数据库配置和连接检查。
 - 验证后端启动和数据库连通。
@@ -74,10 +71,9 @@
 - 2026-07-09：后端骨架注释补充完成；本次为注释和说明更新，未新增运行验证项。
 - 2026-07-09：已核对 uv 官方项目命令，确认 `uv sync --extra dev` 和 `uv run ...` 是当前后端文档采用的命令形式。
 - 2026-07-09：当前终端执行 `uv --version` 失败，说明 uv 未安装或未加入 PATH；已在文档中补充 uv 安装和检查命令。
-- 2026-07-09：修复后端 pytest 导入路径配置，已在 `backend/pyproject.toml` 中为 pytest 添加 `pythonpath = ["."]`；本轮验证受当前 Codex shell 无法识别 `uv`、且 `.venv` 指向的 uv-managed Python 路径不可用限制，待用户终端复跑 `uv run pytest` 确认。
+- 2026-07-09：修复后端 pytest 导入路径配置，并使用 `uv run pytest` 完成验证；结果为 `1 passed, 1 warning`，warning 为 FastAPI/Starlette TestClient 依赖层弃用提醒，不影响当前健康检查测试通过。
 
 ## 待确认
 
 - 模型供应商和 API 兼容地址。
 - 本地是否使用 Docker 启动 PostgreSQL + pgvector。
-- 本地 uv 是否已完成安装，并能正常执行 `uv --version`。
