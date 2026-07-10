@@ -18,12 +18,13 @@
 ## 进行中
 
 - 阶段 1：项目初始化。
+- PostgreSQL + pgvector 的 Docker Compose 配置已添加，等待 Docker Desktop 启动后验证容器运行。
 
 ## 待办
 
 ### 阶段 1：项目初始化
 
-- 添加 docker-compose.yml，启动 PostgreSQL + pgvector。
+- 添加 docker-compose.yml，启动 PostgreSQL + pgvector。（配置已实现，容器启动待验证）
 - 添加数据库配置和连接检查。
 - 验证后端启动和数据库连通。
 
@@ -62,7 +63,7 @@
 
 ## 阻塞
 
-- 暂无。
+- 当前 Codex 环境无法连接 Docker daemon，`docker compose up -d postgres` 报错 `dockerDesktopLinuxEngine` 管道不存在；需要先启动 Docker Desktop 后再复跑。
 
 ## 最近验证
 
@@ -72,6 +73,7 @@
 - 2026-07-09：已核对 uv 官方项目命令，确认 `uv sync --extra dev` 和 `uv run ...` 是当前后端文档采用的命令形式。
 - 2026-07-09：当前终端执行 `uv --version` 失败，说明 uv 未安装或未加入 PATH；已在文档中补充 uv 安装和检查命令。
 - 2026-07-09：修复后端 pytest 导入路径配置，并使用 `uv run pytest` 完成验证；结果为 `1 passed, 1 warning`，warning 为 FastAPI/Starlette TestClient 依赖层弃用提醒，不影响当前健康检查测试通过。
+- 2026-07-09：新增 PostgreSQL + pgvector 的 `docker-compose.yml`，`docker compose config` 已通过；`docker compose up -d postgres` 因 Docker daemon 未运行失败，容器启动待复验。
 
 ## 待确认
 

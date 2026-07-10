@@ -1,0 +1,48 @@
+# 这里使用 Docker Compose 固定本地数据库环境，方便不同机器复现。
+# 相关命令需要在项目根目录执行，也就是当前文件所在目录。
+services:
+  # 预装 pgvector 扩展的 PostgreSQL 数据库。
+  # 后续 RAG 功能会用它存储业务数据和向量数据。
+  postgres:
+    # pgvector/pgvector 是 pgvector 官方维护的 PostgreSQL 镜像。
+    # pg16 表示这个镜像基于 PostgreSQL 16。
+    image: pgvector/pgvector:pg16
+
+    # 固定容器名称，方便本地调试和查看容器状态。
+    container_name: langchain-demo-postgres
+
+    # 本地开发时尽量保持数据库可用。
+    # 如果手动执行 docker compose stop，则不会强制重新启动。
+    restart: unless-stopped
+
+    environment:
+      # 默认数据库用户名；需要调整时可以通过 RAG_POSTGRES_USER 覆盖。
+      POSTGRES_USER: ${RAG_POSTGRES_USER:-rag_user}
+
+      # 数据库密码必须从本地环境变量传入。
+      # 不要把真实密码写进代码或提交到仓库。
+      POSTGRES_PASSWORD: ${RAG_POSTGRES_PASSWORD:?Set RAG_POSTGRES_PASSWORD before running docker compose}
+
+      # 默认数据库名称；需要调整时可以通过 RAG_POSTGRES_DB 覆盖。
+      POSTGRES_DB: ${RAG_POSTGRES_DB:-rag_db}
+
+    ports:
+      # 把容器内的 PostgreSQL 5432 端口映射到本机 5432 端口。
+      - "5432:5432"
+
+    volumes:
+      # 把数据库文件保存到 Docker 命名卷，避免容器重建后数据丢失。
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      # pg_isready 用来检查 PostgreSQL 是否已经可以接受连接。
+      # 双美元符号用于避免 Compose 过早展开容器内环境变量。
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  # Docker 管理的命名卷，用来在容器重启或重建后保留数据库数据。
+  postgres_data:

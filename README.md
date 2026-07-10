@@ -36,6 +36,28 @@
 - 使用 uv 同步后端依赖，并运行后端验证。
 - 添加 PostgreSQL + pgvector 本地开发环境。
 
+## 本地数据库
+
+本地数据库使用 Docker Compose 启动 PostgreSQL + pgvector。
+
+首次启动前，在当前 PowerShell 里设置本地开发用数据库密码：
+
+```powershell
+$env:RAG_POSTGRES_PASSWORD="<your-local-db-password>"
+```
+
+启动数据库：
+
+```powershell
+docker compose up -d postgres
+```
+
+停止数据库：
+
+```powershell
+docker compose stop postgres
+```
+
 ## 后端启动
 
 如果本机还没有安装 `uv`，先在 PowerShell 执行：
