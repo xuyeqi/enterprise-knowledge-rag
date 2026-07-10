@@ -22,6 +22,15 @@ dependencies = [
     # uvicorn 是 ASGI 服务，用来把 FastAPI 应用真正跑起来。
     # [standard] 会额外安装一些常用性能和开发依赖。
     "uvicorn[standard]>=0.30.0,<1.0.0",
+
+    # SQLAlchemy 负责用 Python 代码建立和管理数据库连接。
+    "sqlalchemy>=2.0.0,<3.0.0",
+
+    # asyncpg 是 PostgreSQL 的异步驱动，供 SQLAlchemy 连接数据库使用。
+    "asyncpg>=0.30.0,<1.0.0",
+
+    # pydantic-settings 负责从环境变量读取数据库配置。
+    "pydantic-settings>=2.0.0,<3.0.0",
 ]
 
 [project.optional-dependencies]

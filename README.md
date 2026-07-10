@@ -40,11 +40,14 @@
 
 本地数据库使用 Docker Compose 启动 PostgreSQL + pgvector。
 
-首次启动前，在当前 PowerShell 里设置本地开发用数据库密码：
+首次启动前，在项目根目录复制环境变量示例文件：
 
 ```powershell
-$env:RAG_POSTGRES_PASSWORD="<your-local-db-password>"
+Copy-Item .env.example .env
 ```
+
+然后打开 `.env`，把 `RAG_POSTGRES_PASSWORD` 的占位符替换为本地数据库的真实密码。
+`.env` 已被 `.gitignore` 排除，不要把真实密码写进 `.env.example`。
 
 启动数据库：
 
@@ -97,6 +100,14 @@ uv run uvicorn app.main:app --reload
 ```
 
 注意：本项目后端统一使用 `uv run` 执行项目环境里的命令，不直接运行 `uvicorn ...`，也不使用 `pip install -e ".[dev]"` 作为默认安装方式。
+
+后端会自动读取项目根目录 `.env` 中的数据库配置，不需要在每个 PowerShell 窗口重复设置密码。
+
+数据库连通性检查接口：
+
+```text
+http://127.0.0.1:8000/health/db
+```
 
 ## 学习重点
 

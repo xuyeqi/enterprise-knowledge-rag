@@ -8,7 +8,9 @@ FastAPI backend for the enterprise knowledge base RAG project.
 
 当前文件作用：
 
-- `app/main.py`：FastAPI 应用入口，定义 API 服务和 `/health` 健康检查接口。
+- `app/main.py`：FastAPI 应用入口，定义普通健康检查和数据库健康检查接口。
+- `app/core/config.py`：从 `RAG_POSTGRES_*` 环境变量读取数据库连接配置。
+- `app/db/session.py`：创建 SQLAlchemy 异步引擎，并执行最小数据库查询。
 - `app/__init__.py`：把 `app` 目录标记为 Python 包，方便用 `from app.main import app` 导入。
 - `tests/test_health.py`：使用 FastAPI 测试客户端请求 `/health`，确认接口返回正确。
 - `pyproject.toml`：声明 Python 版本、依赖包和测试配置。
@@ -22,7 +24,7 @@ This stage only provides the minimal backend skeleton:
 - `GET /health` endpoint.
 - Basic test for the health endpoint.
 
-Database, LangChain and RAG logic will be added in later stages.
+当前只接入数据库连通性检查；数据表、LangChain 和 RAG 逻辑将在后续阶段添加。
 
 ## Run Locally
 
@@ -74,6 +76,36 @@ Expected response:
 
 ```json
 {"status":"ok"}
+```
+
+首次启动前，在项目根目录复制环境变量示例文件：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+然后把 `.env` 中的密码占位符替换为本地数据库的真实密码。后端的
+`app/core/config.py` 会自动读取这个文件，不需要每次打开 PowerShell 都重新设置。
+
+数据库连接默认使用以下参数，也可以通过操作系统中的同名环境变量覆盖：
+
+```text
+RAG_POSTGRES_HOST=127.0.0.1
+RAG_POSTGRES_PORT=5432
+RAG_POSTGRES_USER=rag_user
+RAG_POSTGRES_DB=rag_db
+```
+
+数据库健康检查地址：
+
+```text
+http://127.0.0.1:8000/health/db
+```
+
+连接成功时返回：
+
+```json
+{"status":"ok","database":"connected"}
 ```
 
 ## Test
