@@ -109,6 +109,22 @@ uv run uvicorn app.main:app --reload
 http://127.0.0.1:8000/health/db
 ```
 
+## 数据库迁移
+
+项目使用 Alembic 管理数据库 schema 版本。迁移命令在 `backend` 目录执行：
+
+```powershell
+cd backend
+uv sync --extra dev
+uv run alembic upgrade head
+```
+
+第一次迁移会启用 pgvector，并创建 `documents`、`document_chunks` 两张表。
+`document_chunks.embedding` 固定为 `vector(1024)`，与百炼
+`text-embedding-v4` 的 1024 维调用配置保持一致。
+
+迁移会真实修改数据库结构。不要在未确认影响时执行 `alembic downgrade`。
+
 ## 学习重点
 
 这个项目重点不是训练大模型，而是掌握企业级 AI 应用落地常见能力：
