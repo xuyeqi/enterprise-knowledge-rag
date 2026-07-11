@@ -1,8 +1,9 @@
-"""集中读取和整理后端连接 PostgreSQL 所需的配置。
+"""集中读取和整理后端连接 PostgreSQL、调用 embedding 所需的配置。
 
 这个文件属于应用的 core（核心配置）模块，只负责把操作系统中的
 `RAG_POSTGRES_*` 环境变量转换成 Python 对象，不负责建立数据库连接。
-数据库连接模块会调用这里的 `get_database_settings` 获取配置。
+数据库连接模块会调用 `get_database_settings`，embedding 服务会调用
+`get_embedding_settings`。两个配置类共享项目根目录的 `.env` 文件。
 """
 
 # lru_cache 是 Python 标准库提供的缓存装饰器。
@@ -15,7 +16,7 @@ from pathlib import Path
 
 # SecretStr 是 Pydantic 提供的敏感字符串类型。
 # 打印 SecretStr 对象时不会直接显示密码，可以降低密码误入日志的风险。
-from pydantic import SecretStr
+from pydantic import Field, SecretStr, field_validator
 
 # BaseSettings 会自动从环境变量读取字段值；SettingsConfigDict 用来配置读取规则。
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -103,3 +104,65 @@ def get_database_settings() -> DatabaseSettings:
     """
 
     return DatabaseSettings()
+
+
+class EmbeddingSettings(BaseSettings):
+    """保存阿里云百炼文本向量接口所需的配置。
+
+    这里没有使用统一前缀，因为百炼 Key 使用 `DASHSCOPE_API_KEY`，模型名称
+    和维度使用更通用的 `EMBEDDING_*`。Field 的 validation_alias 明确指定
+    每个 Python 字段对应哪个环境变量。
+
+    API Key 没有默认值，必须放在本地 `.env` 或操作系统环境变量中。
+    SecretStr 可以避免调试输出意外显示完整 Key。
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    api_key: SecretStr = Field(validation_alias="DASHSCOPE_API_KEY")
+    base_url: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        validation_alias="DASHSCOPE_BASE_URL",
+    )
+    model: str = Field(
+        default="text-embedding-v4",
+        validation_alias="EMBEDDING_MODEL",
+    )
+    dimension: int = Field(
+        default=1024,
+        validation_alias="EMBEDDING_DIMENSION",
+    )
+
+    # field_validator 会在配置对象创建时检查 dimension，而不是等到写数据库时
+    # 才发现维度不匹配。当前表字段固定为 vector(1024)，所以只允许 1024。
+    @field_validator("dimension")
+    @classmethod
+    def validate_dimension_matches_database(cls, value: int) -> int:
+        """确保 API 返回维度与数据库 vector(1024) 字段一致。
+
+        参数：
+            value：从 EMBEDDING_DIMENSION 读取并转换成整数后的值。
+
+        返回值：
+            校验成功后原样返回 1024，交给 Pydantic 保存。
+
+        异常：
+            值不是 1024 时抛出 ValueError，阻止应用使用错误配置启动调用。
+        """
+
+        if value != 1024:
+            raise ValueError(
+                "EMBEDDING_DIMENSION must be 1024 to match vector(1024)"
+            )
+        return value
+
+
+@lru_cache
+def get_embedding_settings() -> EmbeddingSettings:
+    """创建并缓存应用共用的百炼 embedding 配置对象。"""
+
+    return EmbeddingSettings()

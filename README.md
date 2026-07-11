@@ -125,6 +125,29 @@ uv run alembic upgrade head
 
 迁移会真实修改数据库结构。不要在未确认影响时执行 `alembic downgrade`。
 
+## 百炼文本向量
+
+后端使用阿里云百炼 OpenAI 兼容接口调用 `text-embedding-v4`，输出维度固定
+为 1024，与 PostgreSQL 的 `vector(1024)` 字段一致。
+
+在本地 `.env` 中配置新建且未泄露的 Key：
+
+```env
+DASHSCOPE_API_KEY=<your-new-api-key>
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_MODEL=text-embedding-v4
+EMBEDDING_DIMENSION=1024
+```
+
+真实接口检查命令需要在 `backend` 目录执行：
+
+```powershell
+uv run python -m scripts.check_embedding
+```
+
+该命令会产生真实 API 请求并可能消耗百炼额度；pytest 使用模拟响应，不会
+访问百炼或产生费用。
+
 ## 学习重点
 
 这个项目重点不是训练大模型，而是掌握企业级 AI 应用落地常见能力：

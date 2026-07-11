@@ -18,12 +18,14 @@
 - 2026-07-10：完成异步数据库配置、SQLAlchemy 引擎和 `/health/db` 接口；用户执行 `uv run pytest` 两次均为 `2 passed, 1 warning`，并确认真实接口返回 `{"status":"ok","database":"connected"}`。
 - 2026-07-10：阶段 1 项目初始化完成，进入阶段 2 最小 RAG 闭环。
 - 2026-07-11：完成 Alembic 迁移机制、`vector` 扩展、`documents` 和 `document_chunks` 表；用户执行迁移后确认数据库出现两张业务表和 `alembic_version` 版本表。
+- 2026-07-11：完成百炼 `text-embedding-v4` 异步调用服务；离线测试通过，真实 API 返回 1024 维向量。
 
 ## 进行中
 
 - 阶段 2：最小 RAG 闭环。
 - 已确定百炼 `text-embedding-v4` 和 1024 维向量。
-- 最小 SQLAlchemy 模型和第一次 Alembic 迁移已应用，新增模型测试等待用户执行 pytest 验证。
+- 最小 SQLAlchemy 模型和第一次 Alembic 迁移已应用，模型与接口测试已全部通过。
+- 百炼 embedding 配置、异步客户端、响应校验、离线测试和真实 API 调用均已验证。
 
 ## 待办
 
@@ -31,7 +33,6 @@
 
 - 支持上传 txt / md 文档。
 - 实现文档切片。
-- 调用 embedding 模型生成向量。
 - 将文档片段和 embedding 写入 PostgreSQL + pgvector。
 - 实现基于知识库的问答接口。
 - 返回答案和引用来源。
@@ -66,8 +67,12 @@
 
 ## 最近验证
 
+- 2026-07-11：用户运行 pytest，新增 embedding 模拟测试及现有测试均通过。
+- 2026-07-11：用户执行 `uv run python -m scripts.check_embedding`，模型名称、1024 维向量长度和向量样例输出均符合预期；确认本地配置可以真实调用百炼。
+- 2026-07-11：实现百炼 `text-embedding-v4` 异步客户端，固定单批最多 10 条、1024 维输出，并增加不访问网络的模拟测试和手动真实调用脚本；尚未执行验证，因此未标记完成。
 - 2026-07-11：用户首次执行 `uv run alembic upgrade head` 时，Windows 使用 GBK 读取含 UTF-8 中文注释的 `alembic.ini`，触发 `UnicodeDecodeError`；已将该配置文件改为纯 ASCII，等待重新执行迁移验证。
 - 2026-07-11：用户重新执行迁移成功，并在 `rag_db` 中确认 `documents`、`document_chunks` 和 `alembic_version` 三张表存在。
+- 2026-07-11：用户执行 `uv run pytest`，5 个测试全部通过；结果为 `5 passed, 1 warning`，warning 仍来自 FastAPI/Starlette TestClient 依赖层，不影响当前模型和接口测试。
 - 2026-07-11：确定阿里云百炼 `text-embedding-v4`，项目统一使用 1024 维 dense embedding。
 - 2026-07-11：新增 `documents`、`document_chunks` SQLAlchemy 模型和第一次 Alembic 迁移；尚未执行 `uv sync`、pytest 或真实数据库迁移，因此未标记完成。
 - 2026-07-10：用户执行 `uv run pytest` 两次，结果分别为 `2 passed, 1 warning`；warning 来自 FastAPI/Starlette TestClient 依赖层，不影响测试通过。

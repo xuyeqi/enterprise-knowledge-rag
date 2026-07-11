@@ -13,6 +13,8 @@ FastAPI backend for the enterprise knowledge base RAG project.
 - `app/db/session.py`：创建 SQLAlchemy 异步引擎，并执行最小数据库查询。
 - `app/db/base.py`：定义所有 SQLAlchemy 数据模型共同继承的基础类。
 - `app/models/document.py`：定义原始文档和 1024 维文档切片模型。
+- `app/services/embedding.py`：调用百炼，把 1～10 条文本转换为 1024 维向量。
+- `scripts/check_embedding.py`：由开发者手动执行一次真实 embedding 调用。
 - `migrations/`：保存 Alembic 数据库结构版本和第一次建表迁移。
 - `alembic.ini`：指定 Alembic 的迁移脚本位置和基础行为。
 - `app/__init__.py`：把 `app` 目录标记为 Python 包，方便用 `from app.main import app` 导入。
@@ -29,7 +31,8 @@ This stage only provides the minimal backend skeleton:
 - Basic test for the health endpoint.
 
 当前已经定义文档和文档切片表，并提供 Alembic 迁移。LangChain、文档上传
-和 RAG 业务逻辑将在迁移验证完成后逐步添加。
+和完整 RAG 业务逻辑将继续逐步添加。当前 embedding 服务直接使用百炼的
+OpenAI 兼容接口，LangChain 会在后续检索问答链路中接入。
 
 ## Run Locally
 
@@ -121,6 +124,8 @@ uv run pytest
 
 `uv run pytest` 会在 uv 管理的项目环境里执行 pytest。pytest 会自动查找 `tests/` 目录里以 `test_` 开头的测试文件，并执行里面以 `test_` 开头的测试函数。
 
+embedding 单元测试使用本地假响应，不会调用百炼，也不会产生 API 费用。
+
 ## Database Migration
 
 以下命令会真实修改 `rag_db` 的 schema。执行前保持 Docker Desktop 和
@@ -179,3 +184,42 @@ WHERE table_schema = 'public'
   AND table_name = 'document_chunks'
 ORDER BY ordinal_position;
 ```
+
+## Bailian Embedding
+
+项目使用阿里云百炼 `text-embedding-v4`，固定输出 1024 维 dense embedding，
+与数据库的 `vector(1024)` 字段保持一致。
+
+在项目根目录 `.env` 中填写新建且未泄露的 Key：
+
+```env
+DASHSCOPE_API_KEY=<your-new-api-key>
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_MODEL=text-embedding-v4
+EMBEDDING_DIMENSION=1024
+```
+
+不要把真实 Key 写入 `.env.example`、Python 文件、日志或 Git。
+
+同步新增的 OpenAI SDK 并运行离线测试：
+
+```powershell
+uv sync --extra dev
+uv run pytest
+```
+
+确认测试通过后，再手动执行一次真实 API 检查：
+
+```powershell
+uv run python -m scripts.check_embedding
+```
+
+这个命令会产生一次百炼请求并可能消耗额度。成功时会输出类似：
+
+```text
+model: text-embedding-v4
+dimension: 1024
+first_5_values: [...]
+```
+
+脚本不会输出 API Key，也不会输出完整的 1024 个向量值。

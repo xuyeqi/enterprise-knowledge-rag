@@ -37,6 +37,9 @@ dependencies = [
 
     # pgvector 提供 SQLAlchemy 的 Vector 字段类型，用来保存 embedding 向量。
     "pgvector>=0.3.0,<1.0.0",
+
+    # 百炼提供 OpenAI 兼容接口，使用 OpenAI Python SDK 可以减少供应商专用代码。
+    "openai>=1.0.0,<3.0.0",
 ]
 
 [project.optional-dependencies]
