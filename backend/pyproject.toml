@@ -43,6 +43,9 @@ dependencies = [
 
     # LangChain 独立文本切片包，提供 RecursiveCharacterTextSplitter。
     "langchain-text-splitters>=1.0.0,<2.0.0",
+
+    # FastAPI 解析 multipart/form-data 文件上传请求时需要这个依赖。
+    "python-multipart>=0.0.20,<1.0.0",
 ]
 
 [project.optional-dependencies]

@@ -9,6 +9,8 @@ FastAPI backend for the enterprise knowledge base RAG project.
 当前文件作用：
 
 - `app/main.py`：FastAPI 应用入口，定义普通健康检查和数据库健康检查接口。
+- `app/api/documents.py`：接收 txt／md 文件并返回文本切片预览。
+- `app/schemas/document.py`：定义上传预览接口的 JSON 响应结构。
 - `app/core/config.py`：从 `RAG_POSTGRES_*` 环境变量读取数据库连接配置。
 - `app/db/session.py`：创建 SQLAlchemy 异步引擎，并执行最小数据库查询。
 - `app/db/base.py`：定义所有 SQLAlchemy 数据模型共同继承的基础类。
@@ -249,3 +251,36 @@ chunks = split_text("需要切分的完整文档内容")
 ```
 
 返回值是按原文顺序排列的 `list[str]`，后续会批量传给 `embed_texts`。
+
+## Document Preview Upload
+
+当前提供不持久化的上传预览接口：
+
+```http
+POST /documents/preview
+Content-Type: multipart/form-data
+```
+
+限制：
+
+- 只接受 `.txt` 和 `.md`，扩展名不区分大小写。
+- 文件最大 `2 MB`。
+- 文件必须使用 UTF-8；同时兼容带 BOM 的 UTF-8。
+- 空文件和纯空白文件会被拒绝。
+
+接口只读取、解码和切片，不保存文件、不访问数据库、不调用百炼。
+
+启动后端：
+
+```powershell
+uv run uvicorn app.main:app --reload
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+展开 `POST /documents/preview`，点击 `Try it out`，选择本地 txt 或 md 文件，
+再点击 `Execute`。响应会展示文件名、总字符数、切片数量和每个完整切片。

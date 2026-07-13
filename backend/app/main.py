@@ -2,6 +2,9 @@
 # 类可以理解为「创建对象的模板」；这里用它创建整个 API 应用。
 from fastapi import FastAPI
 
+# 导入文档路由集合，后面通过 include_router 注册到 FastAPI 应用。
+from app.api.documents import router as documents_router
+
 # 从项目的数据库模块导入连接检查函数，供 /health/db 接口调用。
 from app.db.session import check_database_connection
 
@@ -11,6 +14,10 @@ app = FastAPI(
     title="Enterprise Knowledge Base RAG API",
     version="0.1.0",
 )
+
+# include_router 会把 documents.py 中定义的接口加入当前应用。
+# 注册后可以访问 POST /documents/preview，并在 /docs 中看到 documents 分组。
+app.include_router(documents_router)
 
 
 # @app.get("/health") 是装饰器语法。

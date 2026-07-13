@@ -20,6 +20,7 @@
 - 2026-07-11：完成 Alembic 迁移机制、`vector` 扩展、`documents` 和 `document_chunks` 表；用户执行迁移后确认数据库出现两张业务表和 `alembic_version` 版本表。
 - 2026-07-11：完成百炼 `text-embedding-v4` 异步调用服务；离线测试通过，真实 API 返回 1024 维向量。
 - 2026-07-11：完成 LangChain 中文递归文本切片服务；用户执行 pytest，切片测试及现有测试全部通过。
+- 2026-07-13：完成 `POST /documents/preview`；pytest 全部通过，并通过 Swagger 上传真实 txt／md 文件验证切片预览。
 
 ## 进行中
 
@@ -28,13 +29,12 @@
 - 最小 SQLAlchemy 模型和第一次 Alembic 迁移已应用，模型与接口测试已全部通过。
 - 百炼 embedding 配置、异步客户端、响应校验、离线测试和真实 API 调用均已验证。
 - LangChain 中文递归文本切片服务和离线测试已验证通过。
+- txt／md 上传与切片预览接口已通过自动化测试和 Swagger 真实文件验证。
 
 ## 待办
 
 ### 阶段 2：最小 RAG 闭环
 
-- 支持上传 txt / md 文档。
-- 实现文档切片。
 - 将文档片段和 embedding 写入 PostgreSQL + pgvector。
 - 实现基于知识库的问答接口。
 - 返回答案和引用来源。
@@ -69,6 +69,9 @@
 
 ## 最近验证
 
+- 2026-07-13：用户运行 pytest，文档上传预览测试及现有测试全部通过。
+- 2026-07-13：用户通过 Swagger 调用 `POST /documents/preview` 上传真实文件，接口和切片响应符合预期。
+- 2026-07-13：新增 `POST /documents/preview`，支持最大 2 MB 的 UTF-8 txt／md 文件，返回切片预览；增加格式、大小、编码、空文件和长文本测试，尚未执行验证。
 - 2026-07-11：用户执行 pytest，新增文本切片测试及现有测试全部通过。
 - 2026-07-11：新增 LangChain `RecursiveCharacterTextSplitter` 中文切片服务，默认 800 字符、120 字符重叠，并增加空文本、短文本、长文本、重叠和参数边界测试；尚未执行验证，因此未标记完成。
 - 2026-07-11：用户运行 pytest，新增 embedding 模拟测试及现有测试均通过。
