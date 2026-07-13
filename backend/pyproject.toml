@@ -40,6 +40,9 @@ dependencies = [
 
     # 百炼提供 OpenAI 兼容接口，使用 OpenAI Python SDK 可以减少供应商专用代码。
     "openai>=1.0.0,<3.0.0",
+
+    # LangChain 独立文本切片包，提供 RecursiveCharacterTextSplitter。
+    "langchain-text-splitters>=1.0.0,<2.0.0",
 ]
 
 [project.optional-dependencies]

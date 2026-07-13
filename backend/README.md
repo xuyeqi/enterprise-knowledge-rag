@@ -14,6 +14,7 @@ FastAPI backend for the enterprise knowledge base RAG project.
 - `app/db/base.py`：定义所有 SQLAlchemy 数据模型共同继承的基础类。
 - `app/models/document.py`：定义原始文档和 1024 维文档切片模型。
 - `app/services/embedding.py`：调用百炼，把 1～10 条文本转换为 1024 维向量。
+- `app/services/text_splitter.py`：使用 LangChain 按段落和中英文标点递归切片。
 - `scripts/check_embedding.py`：由开发者手动执行一次真实 embedding 调用。
 - `migrations/`：保存 Alembic 数据库结构版本和第一次建表迁移。
 - `alembic.ini`：指定 Alembic 的迁移脚本位置和基础行为。
@@ -126,6 +127,8 @@ uv run pytest
 
 embedding 单元测试使用本地假响应，不会调用百炼，也不会产生 API 费用。
 
+文本切片测试只在内存中处理字符串，同样不访问数据库或外部 API。
+
 ## Database Migration
 
 以下命令会真实修改 `rag_db` 的 schema。执行前保持 Docker Desktop 和
@@ -223,3 +226,26 @@ first_5_values: [...]
 ```
 
 脚本不会输出 API Key，也不会输出完整的 1024 个向量值。
+
+## Text Splitting
+
+项目使用 LangChain 的 `RecursiveCharacterTextSplitter`。当前默认参数：
+
+```text
+chunk_size=800
+chunk_overlap=120
+```
+
+长度使用 Python `len` 按字符计算，不是按模型 token 计算。切片器优先保留
+完整段落和句子，再依次尝试中英文句号、问号、分号、逗号、空格，最后才按
+单字符拆分。
+
+核心调用方式：
+
+```python
+from app.services.text_splitter import split_text
+
+chunks = split_text("需要切分的完整文档内容")
+```
+
+返回值是按原文顺序排列的 `list[str]`，后续会批量传给 `embed_texts`。

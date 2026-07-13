@@ -148,6 +148,14 @@ uv run python -m scripts.check_embedding
 该命令会产生真实 API 请求并可能消耗百炼额度；pytest 使用模拟响应，不会
 访问百炼或产生费用。
 
+## 文本切片
+
+后端使用 LangChain `RecursiveCharacterTextSplitter` 处理 txt／md 文本，
+默认每片最多 800 个字符，相邻切片目标重叠 120 个字符。分隔符优先级包含
+段落、换行和常见中英文标点，以减少句子在不必要的位置被截断。
+
+当前切片服务是纯内存函数，不读取文件、不访问数据库，也不调用 embedding。
+
 ## 学习重点
 
 这个项目重点不是训练大模型，而是掌握企业级 AI 应用落地常见能力：
