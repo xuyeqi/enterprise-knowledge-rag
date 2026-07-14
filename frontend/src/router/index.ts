@@ -6,6 +6,7 @@
  */
 import { createRouter, createWebHistory } from 'vue-router'
 
+import DocumentUploadView from '../views/DocumentUploadView.vue'
 import HomeView from '../views/HomeView.vue'
 
 const router = createRouter({
@@ -15,6 +16,11 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeView,
+    },
+    {
+      path: '/documents/upload',
+      name: 'document-upload',
+      component: DocumentUploadView,
     },
   ],
 })

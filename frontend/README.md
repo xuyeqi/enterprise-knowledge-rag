@@ -47,6 +47,11 @@ http://127.0.0.1:5173
 页面会请求 `/api/health`。Vite 将它转发为后端的 `/health`；状态卡显示
 “FastAPI 服务连接正常”即表示浏览器、Vite 代理和后端三段链路已经连通。
 
+### Upload a document
+
+打开 `/documents/upload`，选择最大 2 MB 的 UTF-8 `.txt` 或 `.md` 文件，点击
+“上传并写入知识库”。成功后页面会显示文档 ID、处理状态和切片数量。
+
 ## Troubleshooting
 
 ### Vite 显示已启动，但页面无法访问

@@ -24,6 +24,10 @@ import { RouterLink, RouterView } from 'vue-router'
           <span class="nav-dot" aria-hidden="true"></span>
           系统概览
         </RouterLink>
+        <RouterLink class="nav-item" to="/documents/upload">
+          <span class="nav-dot" aria-hidden="true"></span>
+          文档上传
+        </RouterLink>
       </nav>
 
       <div class="sidebar-note">
