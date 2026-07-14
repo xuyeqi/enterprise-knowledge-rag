@@ -9,13 +9,14 @@ FastAPI backend for the enterprise knowledge base RAG project.
 当前文件作用：
 
 - `app/main.py`：FastAPI 应用入口，定义普通健康检查和数据库健康检查接口。
-- `app/api/documents.py`：接收 txt／md 文件并返回文本切片预览。
-- `app/schemas/document.py`：定义上传预览接口的 JSON 响应结构。
+- `app/api/documents.py`：接收 txt／md 文件，提供切片预览和正式向量入库接口。
+- `app/schemas/document.py`：定义上传预览和正式入库接口的 JSON 响应结构。
 - `app/core/config.py`：从 `RAG_POSTGRES_*` 环境变量读取数据库连接配置。
-- `app/db/session.py`：创建 SQLAlchemy 异步引擎，并执行最小数据库查询。
+- `app/db/session.py`：创建 SQLAlchemy 异步引擎和请求级会话，并执行最小数据库查询。
 - `app/db/base.py`：定义所有 SQLAlchemy 数据模型共同继承的基础类。
 - `app/models/document.py`：定义原始文档和 1024 维文档切片模型。
 - `app/services/embedding.py`：调用百炼，把 1～10 条文本转换为 1024 维向量。
+- `app/services/document_indexing.py`：编排切片、分批向量生成和数据库事务写入。
 - `app/services/text_splitter.py`：使用 LangChain 按段落和中英文标点递归切片。
 - `scripts/check_embedding.py`：由开发者手动执行一次真实 embedding 调用。
 - `migrations/`：保存 Alembic 数据库结构版本和第一次建表迁移。
@@ -284,3 +285,55 @@ http://127.0.0.1:8000/docs
 
 展开 `POST /documents/preview`，点击 `Try it out`，选择本地 txt 或 md 文件，
 再点击 `Execute`。响应会展示文件名、总字符数、切片数量和每个完整切片。
+
+## Document Indexing Upload
+
+正式入库接口：
+
+```http
+POST /documents
+Content-Type: multipart/form-data
+```
+
+它与预览接口使用相同的文件限制，但处理链路不同：
+
+1. 校验文件名、大小、UTF-8 编码和非空内容。
+2. 使用 LangChain 把原文切成多个文本片段。
+3. 每批最多 10 个切片调用百炼 `text-embedding-v4`，生成 1024 维向量。
+4. 全部向量成功后，通过一次数据库事务写入一条 `documents` 和多条
+   `document_chunks`。
+5. 数据库提交失败时整体回滚，不保留只有部分切片的不完整数据。
+
+注意：调用这个接口会产生真实百炼 API 请求，并会向本地 `rag_db` 写入数据。
+建议先用较短的 txt 或 md 文件验证，避免重复上传造成不必要的模型费用和数据。
+
+成功时返回 HTTP `201 Created`，示例：
+
+```json
+{
+  "document_id": "12345678-1234-5678-1234-567812345678",
+  "filename": "policy.md",
+  "status": "indexed",
+  "chunk_count": 2
+}
+```
+
+在 Swagger 中展开 `POST /documents`，选择文件并执行。接口成功后，可以在
+VS Code PostgreSQL 查询窗口执行以下只读 SQL 核对刚写入的数据：
+
+```sql
+SELECT id, filename, content_type, status, created_at
+FROM documents
+ORDER BY created_at DESC
+LIMIT 5;
+
+SELECT
+    d.filename,
+    dc.chunk_index,
+    LEFT(dc.content, 100) AS content_preview,
+    vector_dims(dc.embedding) AS embedding_dimension
+FROM document_chunks AS dc
+JOIN documents AS d ON d.id = dc.document_id
+ORDER BY d.created_at DESC, dc.chunk_index
+LIMIT 20;
+```

@@ -1,8 +1,11 @@
-"""提供 txt／md 文件上传和文本切片预览接口。
+"""提供 txt／md 文件上传预览和正式向量入库接口。
 
-当前接口只在内存中读取文件并调用 `split_text`，不会保存原文件、调用百炼或
-写入 PostgreSQL。这样可以先独立验证 HTTP 上传、UTF-8 解码和切片边界。
+两个接口共用文件名、大小、编码和空内容校验。预览接口只返回切片；正式接口
+会继续调用百炼生成向量，再把文档元数据、切片和向量写入 PostgreSQL。
 """
+
+# dataclass 用来定义只承载数据的小对象，避免在两个接口间传递含义不清的元组。
+from dataclasses import dataclass
 
 # Path 用于读取文件扩展名；把反斜杠替换为斜杠后还能兼容浏览器上传的路径。
 from pathlib import Path
@@ -10,9 +13,16 @@ from pathlib import Path
 # Annotated 可以同时保存 UploadFile 类型信息和 FastAPI 的 File 参数说明。
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.document import ChunkPreview, DocumentPreviewResponse
+from app.db.session import get_database_session
+from app.schemas.document import (
+    ChunkPreview,
+    DocumentIndexResponse,
+    DocumentPreviewResponse,
+)
+from app.services.document_indexing import index_document
 from app.services.text_splitter import split_text
 
 
@@ -27,6 +37,20 @@ ALLOWED_FILE_TYPES = {
     ".txt": "text/plain",
     ".md": "text/markdown",
 }
+
+
+@dataclass(frozen=True)
+class ParsedTextUpload:
+    """保存一份已经通过公共上传校验的文本文档。
+
+    这个对象由 `read_and_validate_text_upload` 创建，再交给预览接口或正式入库
+    接口使用。frozen=True 表示创建后不能误改字段，有助于保证两个后续流程
+    拿到的是同一份已经校验过的数据。
+    """
+
+    filename: str
+    content_type: str
+    text: str
 
 
 def normalize_and_validate_filename(filename: str | None) -> tuple[str, str]:
@@ -62,20 +86,18 @@ def normalize_and_validate_filename(filename: str | None) -> tuple[str, str]:
     return safe_filename, ALLOWED_FILE_TYPES[extension]
 
 
-@router.post("/preview", response_model=DocumentPreviewResponse)
-async def preview_document(
-    file: Annotated[
-        UploadFile,
-        File(description="需要预览切片结果的 UTF-8 txt 或 md 文件"),
-    ],
-) -> DocumentPreviewResponse:
-    """读取上传文件并返回切片预览，不产生持久化或模型费用。
+async def read_and_validate_text_upload(file: UploadFile) -> ParsedTextUpload:
+    """读取并校验 FastAPI 收到的 txt 或 md 上传文件。
 
-    执行步骤：
-        1. 校验文件名和扩展名。
-        2. 最多读取 2 MiB 加 1 字节，判断是否超过大小限制。
-        3. 使用 UTF-8 解码，并拒绝空文本。
-        4. 调用 `split_text`，组装每个切片的顺序、长度和完整内容。
+    参数：
+        file：FastAPI 从 multipart/form-data 请求中解析出的上传文件。
+
+    返回值：
+        包含安全文件名、可信媒体类型和 UTF-8 文本的 ParsedTextUpload。
+
+    异常：
+        文件名缺失、扩展名不支持、超过 2 MiB、编码错误或内容为空时抛出
+        HTTPException，由 FastAPI 转换成对应的 4xx JSON 响应。
     """
 
     safe_filename, content_type = normalize_and_validate_filename(file.filename)
@@ -108,7 +130,31 @@ async def preview_document(
             detail="上传文件不能为空",
         )
 
-    chunks = split_text(text)
+    return ParsedTextUpload(
+        filename=safe_filename,
+        content_type=content_type,
+        text=text,
+    )
+
+
+@router.post("/preview", response_model=DocumentPreviewResponse)
+async def preview_document(
+    file: Annotated[
+        UploadFile,
+        File(description="需要预览切片结果的 UTF-8 txt 或 md 文件"),
+    ],
+) -> DocumentPreviewResponse:
+    """读取上传文件并返回切片预览，不产生持久化或模型费用。
+
+    执行步骤：
+        1. 校验文件名和扩展名。
+        2. 最多读取 2 MiB 加 1 字节，判断是否超过大小限制。
+        3. 使用 UTF-8 解码，并拒绝空文本。
+        4. 调用 `split_text`，组装每个切片的顺序、长度和完整内容。
+    """
+
+    upload = await read_and_validate_text_upload(file)
+    chunks = split_text(upload.text)
     chunk_previews = [
         ChunkPreview(
             index=index,
@@ -119,9 +165,48 @@ async def preview_document(
     ]
 
     return DocumentPreviewResponse(
-        filename=safe_filename,
-        content_type=content_type,
-        character_count=len(text),
+        filename=upload.filename,
+        content_type=upload.content_type,
+        character_count=len(upload.text),
         chunk_count=len(chunk_previews),
         chunks=chunk_previews,
+    )
+
+
+@router.post(
+    "",
+    response_model=DocumentIndexResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_document(
+    file: Annotated[
+        UploadFile,
+        File(description="需要生成向量并写入知识库的 UTF-8 txt 或 md 文件"),
+    ],
+    session: Annotated[AsyncSession, Depends(get_database_session)],
+) -> DocumentIndexResponse:
+    """生成整份文档的向量，并原子写入 PostgreSQL。
+
+    执行步骤：
+        1. 复用预览接口的文件校验，得到安全文件名和文本。
+        2. `index_document` 完成切片、分批调用百炼和数据库事务。
+        3. 只有数据库 commit 成功后才返回 HTTP 201 和文档 ID。
+
+    如果百炼调用失败，数据库写入尚未开始；如果数据库写入失败，业务服务会
+    rollback。两种情况都不会错误地返回“入库成功”。
+    """
+
+    upload = await read_and_validate_text_upload(file)
+    document = await index_document(
+        session,
+        filename=upload.filename,
+        content_type=upload.content_type,
+        text=upload.text,
+    )
+
+    return DocumentIndexResponse(
+        document_id=document.id,
+        filename=document.filename,
+        status=document.status,
+        chunk_count=len(document.chunks),
     )

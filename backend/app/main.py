@@ -16,7 +16,7 @@ app = FastAPI(
 )
 
 # include_router 会把 documents.py 中定义的接口加入当前应用。
-# 注册后可以访问 POST /documents/preview，并在 /docs 中看到 documents 分组。
+# 注册后可以访问切片预览和正式入库接口，并在 /docs 中看到 documents 分组。
 app.include_router(documents_router)
 
 
