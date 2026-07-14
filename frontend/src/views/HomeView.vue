@@ -26,11 +26,11 @@ onMounted(() => {
         <p class="section-kicker">SYSTEM OVERVIEW</p>
         <h2>知识从文档进入，答案从证据产生。</h2>
         <p>
-          当前后端已完成文档切片、向量检索与带引用问答。这个页面首先验证前端到
-          FastAPI 的连接，下一步将在同一工作台加入上传和问答入口。
+          当前工作台已接入文档上传、文档列表和带引用知识问答，可以验证从资料
+          入库到基于证据生成答案的完整 RAG 链路。
         </p>
       </div>
-      <span class="phase-number">03</span>
+      <span class="phase-number">04</span>
     </div>
 
     <div class="overview-grid">

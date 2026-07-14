@@ -206,6 +206,10 @@ textarea {
   padding-top: 38px;
 }
 
+.chat-page {
+  padding-top: 38px;
+}
+
 .overview-intro {
   display: flex;
   justify-content: space-between;
@@ -270,7 +274,10 @@ textarea {
 .capability-card,
 .upload-card,
 .upload-result-card,
-.document-table-card {
+.document-table-card,
+.question-card,
+.answer-card,
+.source-card {
   border: 1px solid #d9e1eb !important;
   border-radius: 12px !important;
   background: rgb(255 255 255 / 88%) !important;
@@ -280,8 +287,129 @@ textarea {
 .capability-card .el-card__body,
 .upload-card .el-card__body,
 .upload-result-card .el-card__body,
-.document-table-card .el-card__body {
+.document-table-card .el-card__body,
+.question-card .el-card__body,
+.answer-card .el-card__body,
+.source-card .el-card__body {
   padding: 26px;
+}
+
+.question-form {
+  display: grid;
+  gap: 14px;
+}
+
+.question-form > label {
+  color: #253e5a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.question-form__footer {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.question-form__footer .form-message {
+  margin: 0;
+}
+
+.question-hint {
+  margin: 0;
+  color: #718399;
+  font-size: 12px;
+}
+
+.answer-layout {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.72fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.answer-card__header,
+.source-card__header,
+.sources-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.answer-card h3,
+.sources-heading h3 {
+  margin: 8px 0 0;
+  color: #162942;
+  font-size: 20px;
+}
+
+.submitted-query {
+  margin: 28px 0 18px;
+  padding-left: 14px;
+  color: #52708f;
+  border-left: 3px solid #5eead4;
+  font-size: 13px;
+}
+
+.answer-content {
+  color: #253e5a;
+  font-size: 15px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+}
+
+.sources-section {
+  min-width: 0;
+}
+
+.sources-heading {
+  margin-bottom: 14px;
+  padding: 3px 2px 0;
+}
+
+.sources-heading > span {
+  color: #65809e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.source-list {
+  display: grid;
+  gap: 12px;
+}
+
+.source-card__header strong {
+  min-width: 0;
+  color: #253e5a;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.source-card__header span {
+  flex: 0 0 auto;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.source-meta {
+  margin: 10px 0 14px;
+  color: #7b8da1;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.source-content {
+  margin: 0;
+  color: #405872;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 
 .list-toolbar {
@@ -570,6 +698,10 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .answer-layout {
+    grid-template-columns: 1fr;
+  }
+
   .phase-number {
     display: none;
   }
@@ -592,6 +724,10 @@ textarea {
     padding-top: 28px;
   }
 
+  .chat-page {
+    padding-top: 28px;
+  }
+
   .overview-intro {
     padding-bottom: 24px;
   }
@@ -602,6 +738,11 @@ textarea {
 
   .list-toolbar {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .question-form__footer {
+    align-items: stretch;
     flex-direction: column;
   }
 

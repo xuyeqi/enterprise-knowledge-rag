@@ -11,7 +11,18 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
   const response = await fetch(`${API_PREFIX}${path}`, options)
 
   if (!response.ok) {
-    throw new Error(`请求失败：HTTP ${response.status}`)
+    let detail = ''
+
+    try {
+      const errorBody = (await response.json()) as { detail?: unknown }
+      if (typeof errorBody.detail === 'string') {
+        detail = errorBody.detail
+      }
+    } catch {
+      // 非 JSON 错误响应没有可提取的业务信息，下面统一回退到 HTTP 状态码。
+    }
+
+    throw new Error(detail || `请求失败：HTTP ${response.status}`)
   }
 
   return (await response.json()) as T

@@ -56,6 +56,11 @@ http://127.0.0.1:5173
 
 打开 `/documents` 查看已经入库的文件名、状态、切片数量、入库时间和文档 ID。
 
+### Ask the knowledge base
+
+打开 `/chat` 输入问题。页面调用 `POST /answer`，展示模型答案、来源文件、切片
+位置、相似度和实际引用内容。一次问答会产生真实 embedding 和聊天模型请求。
+
 ## Troubleshooting
 
 ### Vite 显示已启动，但页面无法访问

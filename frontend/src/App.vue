@@ -2,7 +2,7 @@
   前端根布局。
 
   这个组件只负责全局导航和页面容器，具体业务内容由 router-view 根据当前路由
-  渲染。后续增加上传页和问答页时，可以继续复用同一套企业后台布局。
+  渲染。概览、文档管理和知识问答共用这套企业后台布局。
 -->
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
@@ -32,11 +32,15 @@ import { RouterLink, RouterView } from 'vue-router'
           <span class="nav-dot" aria-hidden="true"></span>
           文档上传
         </RouterLink>
+        <RouterLink class="nav-item" to="/chat">
+          <span class="nav-dot" aria-hidden="true"></span>
+          知识问答
+        </RouterLink>
       </nav>
 
       <div class="sidebar-note">
-        <span>阶段 3</span>
-        <strong>前端最小界面</strong>
+        <span>阶段 4</span>
+        <strong>工程化增强</strong>
       </div>
     </aside>
 
