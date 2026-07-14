@@ -6,13 +6,15 @@
 -->
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
+
+import BrandLogo from './components/BrandLogo.vue'
 </script>
 
 <template>
   <div class="app-shell">
     <aside class="app-sidebar">
       <div class="brand-block">
-        <span class="brand-mark">KB</span>
+        <BrandLogo class="brand-logo--sidebar" />
         <div>
           <p class="brand-name">Knowledge Base</p>
           <p class="brand-caption">Enterprise RAG</p>
@@ -46,9 +48,12 @@ import { RouterLink, RouterView } from 'vue-router'
 
     <main class="app-main">
       <header class="app-header">
-        <div>
-          <p class="header-eyebrow">ENTERPRISE KNOWLEDGE SYSTEM</p>
-          <h1>企业知识库</h1>
+        <div class="header-brand">
+          <BrandLogo class="brand-logo--header" />
+          <div class="header-brand__copy">
+            <p class="header-eyebrow">ENTERPRISE KNOWLEDGE SYSTEM</p>
+            <h1>林希电子商务公司知识库系统</h1>
+          </div>
         </div>
         <span class="environment-badge">Local</span>
       </header>
