@@ -4,6 +4,8 @@
 Swagger 文档中生成字段说明和示例结构。
 """
 
+# datetime 用于描述数据库记录的带时区创建时间。
+from datetime import datetime
 # UUID 用于描述数据库为文档生成的全局唯一标识符。
 from uuid import UUID
 
@@ -41,3 +43,13 @@ class DocumentIndexResponse(BaseModel):
     filename: str = Field(description="清理路径信息后的原始文件名")
     status: str = Field(description="文档当前处理状态，成功入库时为 indexed")
     chunk_count: int = Field(description="已经写入数据库的切片数量")
+
+
+class DocumentListItem(BaseModel):
+    """表示文档列表中的一条摘要，不包含切片正文或 embedding。"""
+
+    document_id: UUID = Field(description="数据库中的文档唯一标识符")
+    filename: str = Field(description="用户上传时的文件名")
+    status: str = Field(description="文档当前处理状态")
+    chunk_count: int = Field(description="该文档已经写入的切片数量")
+    created_at: datetime = Field(description="文档入库时间")

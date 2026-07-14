@@ -1,7 +1,7 @@
-"""提供 txt／md 文件上传预览和正式向量入库接口。
+"""提供文档列表、txt／md 上传预览和正式向量入库接口。
 
-两个接口共用文件名、大小、编码和空内容校验。预览接口只返回切片；正式接口
-会继续调用百炼生成向量，再把文档元数据、切片和向量写入 PostgreSQL。
+两个上传接口共用文件名、大小、编码和空内容校验。列表接口只读取文档摘要；
+预览接口只返回切片；正式接口会调用百炼并把结果写入 PostgreSQL。
 """
 
 # dataclass 用来定义只承载数据的小对象，避免在两个接口间传递含义不清的元组。
@@ -14,12 +14,17 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+# func 提供 SQL COUNT 聚合；select 用于构造只读文档列表查询。
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_database_session
+# 列表查询直接读取两个数据库模型，但只选择摘要字段，不加载切片正文和向量。
+from app.models.document import Document, DocumentChunk
 from app.schemas.document import (
     ChunkPreview,
     DocumentIndexResponse,
+    DocumentListItem,
     DocumentPreviewResponse,
 )
 from app.services.document_indexing import index_document
@@ -135,6 +140,47 @@ async def read_and_validate_text_upload(file: UploadFile) -> ParsedTextUpload:
         content_type=content_type,
         text=text,
     )
+
+
+@router.get("", response_model=list[DocumentListItem])
+async def list_documents(
+    session: Annotated[AsyncSession, Depends(get_database_session)],
+) -> list[DocumentListItem]:
+    """返回按入库时间倒序排列的文档摘要列表。
+
+    查询通过 LEFT OUTER JOIN 和 COUNT 一次得到文档及切片数量。只选择列表展示
+    所需字段，不加载切片正文和 1024 维 embedding，避免列表页浪费内存。
+    """
+
+    statement = (
+        select(
+            Document.id,
+            Document.filename,
+            Document.status,
+            Document.created_at,
+            func.count(DocumentChunk.id).label("chunk_count"),
+        )
+        .outerjoin(DocumentChunk, DocumentChunk.document_id == Document.id)
+        .group_by(
+            Document.id,
+            Document.filename,
+            Document.status,
+            Document.created_at,
+        )
+        .order_by(Document.created_at.desc())
+    )
+
+    result = await session.execute(statement)
+    return [
+        DocumentListItem(
+            document_id=row.id,
+            filename=row.filename,
+            status=row.status,
+            chunk_count=row.chunk_count,
+            created_at=row.created_at,
+        )
+        for row in result.all()
+    ]
 
 
 @router.post("/preview", response_model=DocumentPreviewResponse)

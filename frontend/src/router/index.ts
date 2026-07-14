@@ -1,11 +1,12 @@
 /**
  * 前端路由配置。
  *
- * 当前只有系统概览页。使用路由而不是直接把页面写进 App.vue，是为了后续增加
- * 文档上传和聊天问答页面时保持清晰的页面边界。
+ * 系统概览、文档列表和文档上传各自使用独立页面组件。后续增加聊天问答时，
+ * 继续通过这里登记路由，保持 App.vue 只负责全局布局。
  */
 import { createRouter, createWebHistory } from 'vue-router'
 
+import DocumentListView from '../views/DocumentListView.vue'
 import DocumentUploadView from '../views/DocumentUploadView.vue'
 import HomeView from '../views/HomeView.vue'
 
@@ -16,6 +17,11 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeView,
+    },
+    {
+      path: '/documents',
+      name: 'document-list',
+      component: DocumentListView,
     },
     {
       path: '/documents/upload',

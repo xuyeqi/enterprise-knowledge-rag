@@ -52,6 +52,10 @@ http://127.0.0.1:5173
 打开 `/documents/upload`，选择最大 2 MB 的 UTF-8 `.txt` 或 `.md` 文件，点击
 “上传并写入知识库”。成功后页面会显示文档 ID、处理状态和切片数量。
 
+### View documents
+
+打开 `/documents` 查看已经入库的文件名、状态、切片数量、入库时间和文档 ID。
+
 ## Troubleshooting
 
 ### Vite 显示已启动，但页面无法访问

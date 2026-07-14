@@ -202,6 +202,10 @@ textarea {
   padding-top: 38px;
 }
 
+.document-list-page {
+  padding-top: 38px;
+}
+
 .overview-intro {
   display: flex;
   justify-content: space-between;
@@ -265,7 +269,8 @@ textarea {
 .status-card,
 .capability-card,
 .upload-card,
-.upload-result-card {
+.upload-result-card,
+.document-table-card {
   border: 1px solid #d9e1eb !important;
   border-radius: 12px !important;
   background: rgb(255 255 255 / 88%) !important;
@@ -274,8 +279,50 @@ textarea {
 .status-card .el-card__body,
 .capability-card .el-card__body,
 .upload-card .el-card__body,
-.upload-result-card .el-card__body {
+.upload-result-card .el-card__body,
+.document-table-card .el-card__body {
   padding: 26px;
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.list-toolbar h3 {
+  margin: 8px 0 0;
+  color: #162942;
+  font-size: 20px;
+}
+
+.document-table {
+  width: 100%;
+}
+
+.document-name {
+  color: #253e5a;
+  font-weight: 700;
+}
+
+.document-id {
+  color: #52708f;
+  font-size: 11px;
+}
+
+.table-message {
+  margin: 0;
+  padding: 18px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.table-message--error {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
 }
 
 .upload-layout {
@@ -541,12 +588,21 @@ textarea {
     padding-top: 28px;
   }
 
+  .document-list-page {
+    padding-top: 28px;
+  }
+
   .overview-intro {
     padding-bottom: 24px;
   }
 
   .page-intro {
     padding-bottom: 24px;
+  }
+
+  .list-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .status-card__header,

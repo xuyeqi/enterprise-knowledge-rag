@@ -1,9 +1,9 @@
 /**
  * 文档接口。
  *
- * 上传页通过这里把浏览器选中的文件包装为 multipart/form-data，并请求后端
- * `POST /documents`。浏览器会自动生成 multipart boundary，因此不能手动设置
- * `Content-Type` 请求头。
+ * 文档列表页通过这里读取文档摘要；上传页则把浏览器选中的文件包装为
+ * multipart/form-data，并请求后端 `POST /documents`。浏览器会自动生成
+ * multipart boundary，因此上传时不能手动设置 `Content-Type` 请求头。
  */
 import { request } from './http'
 
@@ -13,6 +13,20 @@ export interface DocumentIndexResponse {
   filename: string
   status: string
   chunk_count: number
+}
+
+/** 文档列表中的摘要字段；不包含切片正文和 embedding。 */
+export interface DocumentListItem {
+  document_id: string
+  filename: string
+  status: string
+  chunk_count: number
+  created_at: string
+}
+
+/** 读取按入库时间倒序排列的全部文档摘要。 */
+export function getDocuments(): Promise<DocumentListItem[]> {
+  return request<DocumentListItem[]>('/documents')
 }
 
 /**

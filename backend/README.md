@@ -10,7 +10,7 @@ FastAPI backend for the enterprise knowledge base RAG project.
 当前文件作用：
 
 - `app/main.py`：FastAPI 应用入口，定义普通健康检查和数据库健康检查接口。
-- `app/api/documents.py`：接收 txt／md 文件，提供切片预览和正式向量入库接口。
+- `app/api/documents.py`：提供文档列表、txt／md 切片预览和正式向量入库接口。
 - `app/api/search.py`：接收自然语言问题，返回 pgvector 检索到的相关切片。
 - `app/api/answer.py`：组合向量检索和对话模型，返回知识库答案与引用来源。
 - `app/schemas/document.py`：定义上传预览和正式入库接口的 JSON 响应结构。
@@ -347,6 +347,17 @@ JOIN documents AS d ON d.id = dc.document_id
 ORDER BY d.created_at DESC, dc.chunk_index
 LIMIT 20;
 ```
+
+## Document List
+
+文档列表接口：
+
+```http
+GET /documents
+```
+
+接口按创建时间倒序返回文档 ID、文件名、状态、切片数量和创建时间。查询只聚合
+切片数量，不读取切片正文或 embedding。知识库为空时返回空数组 `[]`。
 
 ## Knowledge Search
 
