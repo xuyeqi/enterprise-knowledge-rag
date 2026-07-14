@@ -1,9 +1,9 @@
-"""集中读取和整理后端连接 PostgreSQL、调用 embedding 所需的配置。
+"""集中读取和整理后端连接 PostgreSQL、调用百炼模型所需的配置。
 
 这个文件属于应用的 core（核心配置）模块，只负责把操作系统中的
 `RAG_POSTGRES_*` 环境变量转换成 Python 对象，不负责建立数据库连接。
-数据库连接模块会调用 `get_database_settings`，embedding 服务会调用
-`get_embedding_settings`。两个配置类共享项目根目录的 `.env` 文件。
+数据库连接模块会调用 `get_database_settings`，embedding 和问答服务会分别调用
+对应的模型配置函数。所有配置类共享项目根目录的 `.env` 文件。
 """
 
 # lru_cache 是 Python 标准库提供的缓存装饰器。
@@ -166,3 +166,34 @@ def get_embedding_settings() -> EmbeddingSettings:
     """创建并缓存应用共用的百炼 embedding 配置对象。"""
 
     return EmbeddingSettings()
+
+
+class ChatSettings(BaseSettings):
+    """保存阿里云百炼知识库问答模型所需的配置。
+
+    问答模型与 embedding 模型复用同一个百炼 API Key 和 OpenAI 兼容地址，
+    但使用独立的 `CHAT_MODEL` 环境变量，避免两类模型名称互相覆盖。
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    api_key: SecretStr = Field(validation_alias="DASHSCOPE_API_KEY")
+    base_url: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        validation_alias="DASHSCOPE_BASE_URL",
+    )
+    model: str = Field(
+        default="qwen3.7-plus",
+        validation_alias="CHAT_MODEL",
+    )
+
+
+@lru_cache
+def get_chat_settings() -> ChatSettings:
+    """创建并缓存应用共用的百炼问答模型配置对象。"""
+
+    return ChatSettings()

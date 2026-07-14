@@ -44,6 +44,9 @@ dependencies = [
     # LangChain 独立文本切片包，提供 RecursiveCharacterTextSplitter。
     "langchain-text-splitters>=1.0.0,<2.0.0",
 
+    # LangChain 的 OpenAI 兼容聊天模型集成，用于通过百炼生成知识库答案。
+    "langchain-openai>=1.0.0,<2.0.0",
+
     # FastAPI 解析 multipart/form-data 文件上传请求时需要这个依赖。
     "python-multipart>=0.0.20,<1.0.0",
 ]

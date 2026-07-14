@@ -2,6 +2,9 @@
 # 类可以理解为「创建对象的模板」；这里用它创建整个 API 应用。
 from fastapi import FastAPI
 
+# 导入知识库问答路由，提供检索增强生成的最终答案接口。
+from app.api.answer import router as answer_router
+
 # 导入文档路由集合，后面通过 include_router 注册到 FastAPI 应用。
 from app.api.documents import router as documents_router
 
@@ -24,6 +27,9 @@ app.include_router(documents_router)
 
 # 注册后可以访问 POST /search，并在 Swagger 中看到独立的 search 分组。
 app.include_router(search_router)
+
+# 注册后可以访问 POST /answer，并在 Swagger 中看到独立的 answer 分组。
+app.include_router(answer_router)
 
 
 # @app.get("/health") 是装饰器语法。

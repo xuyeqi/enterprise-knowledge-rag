@@ -4,15 +4,18 @@ FastAPI backend for the enterprise knowledge base RAG project.
 
 ## File Purpose
 
-这个目录是后端服务目录。当前阶段只做一个最小 FastAPI 应用，目的是先确认「后端能启动、接口能访问、测试能验证」。
+这个目录是后端服务目录。当前阶段实现可验证的最小 RAG 闭环，包括文档入库、
+向量检索、模型回答和引用来源。
 
 当前文件作用：
 
 - `app/main.py`：FastAPI 应用入口，定义普通健康检查和数据库健康检查接口。
 - `app/api/documents.py`：接收 txt／md 文件，提供切片预览和正式向量入库接口。
 - `app/api/search.py`：接收自然语言问题，返回 pgvector 检索到的相关切片。
+- `app/api/answer.py`：组合向量检索和对话模型，返回知识库答案与引用来源。
 - `app/schemas/document.py`：定义上传预览和正式入库接口的 JSON 响应结构。
 - `app/schemas/search.py`：定义知识库向量检索接口的请求和响应结构。
+- `app/schemas/answer.py`：定义知识库问答接口的请求和响应结构。
 - `app/core/config.py`：从 `RAG_POSTGRES_*` 环境变量读取数据库连接配置。
 - `app/db/session.py`：创建 SQLAlchemy 异步引擎和请求级会话，并执行最小数据库查询。
 - `app/db/base.py`：定义所有 SQLAlchemy 数据模型共同继承的基础类。
@@ -20,6 +23,7 @@ FastAPI backend for the enterprise knowledge base RAG project.
 - `app/services/embedding.py`：调用百炼，把 1～10 条文本转换为 1024 维向量。
 - `app/services/document_indexing.py`：编排切片、分批向量生成和数据库事务写入。
 - `app/services/retrieval.py`：生成问题向量并执行 pgvector 余弦距离检索。
+- `app/services/answering.py`：使用 LangChain 组织提示词并调用百炼生成答案。
 - `app/services/text_splitter.py`：使用 LangChain 按段落和中英文标点递归切片。
 - `scripts/check_embedding.py`：由开发者手动执行一次真实 embedding 调用。
 - `migrations/`：保存 Alembic 数据库结构版本和第一次建表迁移。
@@ -31,15 +35,16 @@ FastAPI backend for the enterprise knowledge base RAG project.
 
 ## Current Scope
 
-This stage only provides the minimal backend skeleton:
+Current backend scope:
 
-- FastAPI application entry.
-- `GET /health` endpoint.
-- Basic test for the health endpoint.
+- FastAPI health and database connectivity endpoints.
+- txt／md document preview and vector indexing.
+- pgvector semantic search.
+- LangChain knowledge answer generation with sources.
 
-当前已经定义文档和文档切片表，并提供 Alembic 迁移。LangChain、文档上传
-和完整 RAG 业务逻辑将继续逐步添加。当前 embedding 服务直接使用百炼的
-OpenAI 兼容接口，LangChain 会在后续检索问答链路中接入。
+当前已经提供文档上传、切片、向量入库、向量检索和 LangChain 知识库问答链路。
+embedding 服务直接使用百炼的 OpenAI 兼容接口；问答服务通过
+`langchain-openai` 调用同一个兼容接口。
 
 ## Run Locally
 
@@ -390,3 +395,51 @@ Content-Type: application/json
 调用 `/search` 会产生一次真实百炼 embedding 请求，但只读取数据库，不会新增、
 修改或删除文档。当前使用精确余弦距离检索；数据量增大并经过性能验证后，再考虑
 增加 HNSW 或 IVFFlat 索引。
+
+## Knowledge Answer
+
+最小 RAG 问答接口：
+
+```http
+POST /answer
+Content-Type: application/json
+```
+
+请求示例：
+
+```json
+{
+  "query": "打车费怎么报销？",
+  "limit": 3
+}
+```
+
+处理流程：
+
+1. 使用现有向量检索服务召回最多 `limit` 个相关切片。
+2. 用 LangChain 提示词把切片组织成带 `[资料1]` 编号的上下文。
+3. 调用百炼 `qwen3.7-plus` 非思考模式生成答案。
+4. 返回答案以及真正交给模型的全部引用切片。
+
+响应示例：
+
+```json
+{
+  "query": "打车费怎么报销？",
+  "answer": "出差期间产生的出租车费用可以报销。[资料1]",
+  "source_count": 1,
+  "sources": [
+    {
+      "chunk_id": "11111111-1111-1111-1111-111111111111",
+      "document_id": "22222222-2222-2222-2222-222222222222",
+      "filename": "expense-policy.md",
+      "chunk_index": 2,
+      "content": "出差期间产生的出租车费用可以报销。",
+      "similarity": 0.91
+    }
+  ]
+}
+```
+
+一次正常调用会产生一次 embedding 请求和一次聊天模型请求，并读取 PostgreSQL，
+不会修改数据库。数据库没有已索引切片时接口直接返回固定说明，不调用聊天模型。

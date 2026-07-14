@@ -22,19 +22,19 @@
 
 ## 当前状态
 
-项目处于阶段 1：项目初始化。
+项目处于阶段 3：前端最小界面。
 
 当前已完成：
 
-- 确定项目方向。
-- 确定技术栈。
-- 建立项目规范、路线图和说明文档。
-- 创建 FastAPI 后端最小骨架和 `/health` 接口。
+- FastAPI、PostgreSQL + pgvector 和 Alembic 基础链路。
+- txt／md 上传、中文切片、百炼向量生成和文档入库。
+- `POST /search` 向量检索与引用来源。
+- `POST /answer` LangChain 知识库问答与引用来源，已通过离线测试和真实调用验证。
 
 下一步：
 
-- 使用 uv 同步后端依赖，并运行后端验证。
-- 添加 PostgreSQL + pgvector 本地开发环境。
+- 初始化 Vue3 + TypeScript + Vite 前端。
+- 实现文档上传和聊天问答最小页面。
 
 ## 本地数据库
 
@@ -137,6 +137,7 @@ DASHSCOPE_API_KEY=<your-new-api-key>
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EMBEDDING_MODEL=text-embedding-v4
 EMBEDDING_DIMENSION=1024
+CHAT_MODEL=qwen3.7-plus
 ```
 
 真实接口检查命令需要在 `backend` 目录执行：
@@ -147,6 +148,10 @@ uv run python -m scripts.check_embedding
 
 该命令会产生真实 API 请求并可能消耗百炼额度；pytest 使用模拟响应，不会
 访问百炼或产生费用。
+
+知识库问答使用 LangChain `ChatOpenAI` 通过同一个百炼兼容地址调用
+`qwen3.7-plus`。当前关闭思考模式，优先验证低延迟的最小 RAG 闭环；模型只接收
+向量检索返回的文字切片，并在响应中保留引用来源。
 
 ## 文本切片
 
