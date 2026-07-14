@@ -10,13 +10,16 @@ FastAPI backend for the enterprise knowledge base RAG project.
 
 - `app/main.py`：FastAPI 应用入口，定义普通健康检查和数据库健康检查接口。
 - `app/api/documents.py`：接收 txt／md 文件，提供切片预览和正式向量入库接口。
+- `app/api/search.py`：接收自然语言问题，返回 pgvector 检索到的相关切片。
 - `app/schemas/document.py`：定义上传预览和正式入库接口的 JSON 响应结构。
+- `app/schemas/search.py`：定义知识库向量检索接口的请求和响应结构。
 - `app/core/config.py`：从 `RAG_POSTGRES_*` 环境变量读取数据库连接配置。
 - `app/db/session.py`：创建 SQLAlchemy 异步引擎和请求级会话，并执行最小数据库查询。
 - `app/db/base.py`：定义所有 SQLAlchemy 数据模型共同继承的基础类。
 - `app/models/document.py`：定义原始文档和 1024 维文档切片模型。
 - `app/services/embedding.py`：调用百炼，把 1～10 条文本转换为 1024 维向量。
 - `app/services/document_indexing.py`：编排切片、分批向量生成和数据库事务写入。
+- `app/services/retrieval.py`：生成问题向量并执行 pgvector 余弦距离检索。
 - `app/services/text_splitter.py`：使用 LangChain 按段落和中英文标点递归切片。
 - `scripts/check_embedding.py`：由开发者手动执行一次真实 embedding 调用。
 - `migrations/`：保存 Alembic 数据库结构版本和第一次建表迁移。
@@ -131,6 +134,8 @@ uv run pytest
 embedding 单元测试使用本地假响应，不会调用百炼，也不会产生 API 费用。
 
 文本切片测试只在内存中处理字符串，同样不访问数据库或外部 API。
+
+向量检索测试会模拟问题 embedding 和数据库查询，不会调用百炼或读取 PostgreSQL。
 
 ## Database Migration
 
@@ -337,3 +342,51 @@ JOIN documents AS d ON d.id = dc.document_id
 ORDER BY d.created_at DESC, dc.chunk_index
 LIMIT 20;
 ```
+
+## Knowledge Search
+
+最小向量检索接口：
+
+```http
+POST /search
+Content-Type: application/json
+```
+
+请求示例：
+
+```json
+{
+  "query": "打车费怎么报销？",
+  "limit": 3
+}
+```
+
+处理流程：
+
+1. 校验问题不是空白文本，并把 `limit` 限制在 1～10。
+2. 使用与文档入库相同的百炼 `text-embedding-v4` 生成 1024 维问题向量。
+3. 使用 pgvector 余弦距离查询状态为 `indexed` 的文档切片。
+4. 按相似度从高到低返回切片内容、文件名和文档 ID。
+
+响应示例：
+
+```json
+{
+  "query": "打车费怎么报销？",
+  "result_count": 1,
+  "results": [
+    {
+      "chunk_id": "11111111-1111-1111-1111-111111111111",
+      "document_id": "22222222-2222-2222-2222-222222222222",
+      "filename": "expense-policy.md",
+      "chunk_index": 2,
+      "content": "出差期间产生的出租车费用可以报销。",
+      "similarity": 0.91
+    }
+  ]
+}
+```
+
+调用 `/search` 会产生一次真实百炼 embedding 请求，但只读取数据库，不会新增、
+修改或删除文档。当前使用精确余弦距离检索；数据量增大并经过性能验证后，再考虑
+增加 HNSW 或 IVFFlat 索引。

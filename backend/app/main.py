@@ -5,6 +5,9 @@ from fastapi import FastAPI
 # 导入文档路由集合，后面通过 include_router 注册到 FastAPI 应用。
 from app.api.documents import router as documents_router
 
+# 导入知识库检索路由，提供问题向量化和相关切片查询接口。
+from app.api.search import router as search_router
+
 # 从项目的数据库模块导入连接检查函数，供 /health/db 接口调用。
 from app.db.session import check_database_connection
 
@@ -18,6 +21,9 @@ app = FastAPI(
 # include_router 会把 documents.py 中定义的接口加入当前应用。
 # 注册后可以访问切片预览和正式入库接口，并在 /docs 中看到 documents 分组。
 app.include_router(documents_router)
+
+# 注册后可以访问 POST /search，并在 Swagger 中看到独立的 search 分组。
+app.include_router(search_router)
 
 
 # @app.get("/health") 是装饰器语法。
