@@ -1,0 +1,404 @@
+/*
+ * 前端全局样式。
+ *
+ * 当前建立稳定的企业后台视觉基线：深色导航、清晰层级和高对比状态反馈。
+ * 页面专属样式暂时也集中在这里，避免为首个页面过早引入额外样式方案。
+ */
+:root {
+  font-family:
+    Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  color: #15253d;
+  background: #eef2f7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 80% 0%, rgb(56 189 248 / 9%), transparent 28rem),
+    #eef2f7;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+
+.app-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 244px;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 20px 24px;
+  color: #d8e4f2;
+  background: #0b1729;
+  border-right: 1px solid rgb(255 255 255 / 8%);
+}
+
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 28px;
+  border-bottom: 1px solid rgb(255 255 255 / 9%);
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: #071423;
+  background: #5eead4;
+  border-radius: 10px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.brand-name,
+.brand-caption,
+.header-eyebrow,
+.card-label,
+.section-kicker {
+  margin: 0;
+}
+
+.brand-name {
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.brand-caption {
+  margin-top: 4px;
+  color: #7990ad;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.app-nav {
+  margin-top: 26px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  color: #9db0c8;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  transition: 160ms ease;
+}
+
+.nav-item:hover,
+.nav-item.router-link-active {
+  color: #effcff;
+  background: rgb(45 212 191 / 10%);
+  border-color: rgb(94 234 212 / 18%);
+}
+
+.nav-dot {
+  width: 7px;
+  height: 7px;
+  background: #5eead4;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgb(94 234 212 / 10%);
+}
+
+.sidebar-note {
+  margin-top: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: rgb(255 255 255 / 4%);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 10px;
+}
+
+.sidebar-note span {
+  color: #5eead4;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.sidebar-note strong {
+  color: #f1f5f9;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.app-main {
+  grid-column: 2;
+  min-width: 0;
+  padding: 0 44px 52px;
+}
+
+.app-header {
+  min-height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #d7dee8;
+}
+
+.app-header h1 {
+  margin: 7px 0 0;
+  color: #102038;
+  font-size: 25px;
+  letter-spacing: -0.03em;
+}
+
+.header-eyebrow,
+.section-kicker,
+.card-label {
+  color: #65809e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+}
+
+.environment-badge {
+  padding: 7px 12px;
+  color: #0f766e;
+  background: #ccfbf1;
+  border: 1px solid #99f6e4;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.overview-page {
+  padding-top: 38px;
+}
+
+.overview-intro {
+  display: flex;
+  justify-content: space-between;
+  gap: 48px;
+  padding: 8px 0 34px;
+}
+
+.overview-intro h2 {
+  max-width: 720px;
+  margin: 12px 0 14px;
+  color: #102038;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+}
+
+.overview-intro p:not(.section-kicker) {
+  max-width: 720px;
+  margin: 0;
+  color: #5b6f86;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.phase-number {
+  align-self: flex-start;
+  color: transparent;
+  -webkit-text-stroke: 1px #becbd9;
+  font-size: 82px;
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.08em;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 22px;
+}
+
+.status-card,
+.capability-card {
+  border: 1px solid #d9e1eb !important;
+  border-radius: 12px !important;
+  background: rgb(255 255 255 / 88%) !important;
+}
+
+.status-card .el-card__body,
+.capability-card .el-card__body {
+  padding: 26px;
+}
+
+.status-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.status-card h2,
+.capability-card h2 {
+  margin: 8px 0 0;
+  color: #162942;
+  font-size: 20px;
+}
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-indicator--checking {
+  color: #a16207;
+  background: #fef9c3;
+}
+
+.status-indicator--connected {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.status-indicator--disconnected {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.status-indicator__dot {
+  width: 7px;
+  height: 7px;
+  background: currentcolor;
+  border-radius: 50%;
+}
+
+.status-message {
+  min-height: 27px;
+  margin: 42px 0 34px;
+  color: #334b66;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.status-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid #e7ecf2;
+}
+
+.status-card__footer code {
+  color: #52708f;
+  font-size: 12px;
+}
+
+.pipeline-list {
+  margin: 26px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pipeline-list li {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  color: #405872;
+  border-bottom: 1px solid #e7ecf2;
+  font-size: 13px;
+}
+
+.pipeline-list li:last-child {
+  border-bottom: 0;
+}
+
+.pipeline-list span {
+  color: #0f766e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    display: block;
+  }
+
+  .app-sidebar {
+    position: static;
+    width: auto;
+    min-height: auto;
+    padding: 18px 22px;
+  }
+
+  .brand-block {
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .app-nav,
+  .sidebar-note {
+    display: none;
+  }
+
+  .app-main {
+    padding: 0 22px 36px;
+  }
+
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .phase-number {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-header {
+    min-height: 88px;
+  }
+
+  .overview-page {
+    padding-top: 28px;
+  }
+
+  .overview-intro {
+    padding-bottom: 24px;
+  }
+
+  .status-card__header,
+  .status-card__footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .status-message {
+    margin: 30px 0;
+  }
+}

@@ -30,11 +30,12 @@
 - txt／md 上传、中文切片、百炼向量生成和文档入库。
 - `POST /search` 向量检索与引用来源。
 - `POST /answer` LangChain 知识库问答与引用来源，已通过离线测试和真实调用验证。
+- Vue3 + TypeScript + Vite 前端骨架和健康状态页，等待安装依赖与构建验证。
 
 下一步：
 
-- 初始化 Vue3 + TypeScript + Vite 前端。
-- 实现文档上传和聊天问答最小页面。
+- 安装前端依赖、执行构建，并验证页面能够连接 FastAPI。
+- 验证通过后实现文档上传和聊天问答最小页面。
 
 ## 本地数据库
 
@@ -108,6 +109,30 @@ uv run uvicorn app.main:app --reload
 ```text
 http://127.0.0.1:8000/health/db
 ```
+
+## 前端启动
+
+前端要求 Node.js `20.19+` 或 `22.12+`。进入前端目录并安装依赖：
+
+```powershell
+cd frontend
+npm install
+```
+
+执行 TypeScript 检查和生产构建：
+
+```powershell
+npm run build
+```
+
+先启动 FastAPI，再启动前端开发服务器：
+
+```powershell
+npm run dev
+```
+
+打开 `http://127.0.0.1:5173`。页面显示“FastAPI 服务连接正常”时，说明浏览器、
+Vite `/api` 代理和后端健康接口已经连通。
 
 ## 数据库迁移
 

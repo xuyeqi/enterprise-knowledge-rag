@@ -67,7 +67,9 @@
 │   │   ├── components/
 │   │   ├── router/
 │   │   ├── stores/
+│   │   ├── styles/
 │   │   ├── views/
+│   │   ├── App.vue
 │   │   └── main.ts
 │   ├── package.json
 │   └── README.md
@@ -76,6 +78,16 @@
 ├── ROADMAP.md
 └── CLAUDE.md
 ```
+
+### 前端结构与运行约定
+
+- 前端目录固定为 `frontend/`，使用 npm 管理依赖并提交 `package-lock.json`。
+- `src/api/` 只放 HTTP 请求和响应类型；页面不直接散落 `fetch` 调用。
+- `src/views/` 放路由页面，`src/components/` 放可复用界面组件，`src/router/` 放路由配置，`src/stores/` 放 Pinia 状态。
+- 开发环境统一请求 `/api/*`，由 Vite 代理到 `http://127.0.0.1:8000`，前端代码不硬编码后端完整地址。
+- 当前使用浏览器原生 `fetch`，在出现统一拦截、取消请求等明确需求前不引入 Axios。
+- 本地开发使用 `npm run dev`，类型检查与生产构建统一使用 `npm run build`。
+- 新增前端依赖前先确认 Vue、浏览器标准能力或现有依赖不能解决，避免同类库重复引入。
 
 ## 开发原则
 
@@ -102,7 +114,7 @@
 ## 学习型协作分工
 
 - Codex 负责分析方案、编写代码和文档、解释关键代码，并给出需要执行的命令、执行目录、操作目的和预期结果。
-- 用户负责亲自执行 `uv sync`、`uv run pytest`、启动服务、数据库操作等学习和验证命令，并将完整结果或报错反馈给 Codex。
+- 用户负责亲自执行 `uv sync`、`uv run pytest`、`npm install`、`npm run build`、启动服务、数据库操作等学习和验证命令，并将完整结果或报错反馈给 Codex。
 - Codex 默认不代替用户执行上述学习和验证命令；如果某项操作必须由 Codex 执行，需要先说明原因并获得用户确认。
 - 在用户反馈真实执行结果前，Codex 不得声称代码已经验证或完成，也不得将 `ROADMAP.md` 中的对应事项标记为“已完成”。
 - 用户反馈结果后，Codex 负责判断是否达到预期；如果失败，需要解释根因、修改代码或给出下一条最小排查命令。
