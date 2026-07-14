@@ -5,55 +5,55 @@
   这里不提前引入额外状态结构或流式协议。
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref } from "vue";
 
-import {
-  askKnowledgeBase,
-  type KnowledgeAnswerResponse,
-} from '../api/answer'
+import { askKnowledgeBase, type KnowledgeAnswerResponse } from "../api/answer";
 
-const MAX_QUERY_LENGTH = 1000
+const MAX_QUERY_LENGTH = 1000;
 
-const query = ref('')
-const isAnswering = ref(false)
-const errorMessage = ref('')
-const answerResult = ref<KnowledgeAnswerResponse | null>(null)
+const query = ref("");
+const isAnswering = ref(false);
+const errorMessage = ref("");
+const answerResult = ref<KnowledgeAnswerResponse | null>(null);
 
 const canSubmit = computed(() => {
-  const normalizedQuery = query.value.trim()
-  return normalizedQuery.length > 0 && normalizedQuery.length <= MAX_QUERY_LENGTH
-})
+  const normalizedQuery = query.value.trim();
+  return (
+    normalizedQuery.length > 0 && normalizedQuery.length <= MAX_QUERY_LENGTH
+  );
+});
 
 /** 提交清理后的问题，并用本次响应替换上一次问答结果。 */
 async function handleAsk(): Promise<void> {
-  const normalizedQuery = query.value.trim()
+  const normalizedQuery = query.value.trim();
 
   if (!normalizedQuery) {
-    errorMessage.value = '请输入需要查询的问题。'
-    return
+    errorMessage.value = "请输入需要查询的问题。";
+    return;
   }
 
   if (normalizedQuery.length > MAX_QUERY_LENGTH) {
-    errorMessage.value = `问题不能超过 ${MAX_QUERY_LENGTH} 个字符。`
-    return
+    errorMessage.value = `问题不能超过 ${MAX_QUERY_LENGTH} 个字符。`;
+    return;
   }
 
-  isAnswering.value = true
-  errorMessage.value = ''
-  answerResult.value = null
+  isAnswering.value = true;
+  errorMessage.value = "";
+  answerResult.value = null;
 
   try {
-    answerResult.value = await askKnowledgeBase(normalizedQuery)
+    answerResult.value = await askKnowledgeBase(normalizedQuery);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '知识库问答失败，请稍后重试。'
+    errorMessage.value =
+      error instanceof Error ? error.message : "知识库问答失败，请稍后重试。";
   } finally {
-    isAnswering.value = false
+    isAnswering.value = false;
   }
 }
 
 /** 把 0～1 的余弦相似度转换为便于阅读的百分比。 */
 function formatSimilarity(similarity: number): string {
-  return `${(similarity * 100).toFixed(1)}%`
+  return `${(similarity * 100).toFixed(1)}%`;
 }
 </script>
 
@@ -84,10 +84,16 @@ function formatSimilarity(similarity: number): string {
         />
 
         <div class="question-form__footer">
-          <p v-if="errorMessage" class="form-message form-message--error" role="alert">
+          <p
+            v-if="errorMessage"
+            class="form-message form-message--error"
+            role="alert"
+          >
             {{ errorMessage }}
           </p>
-          <p v-else class="question-hint">每次问答默认召回最多 3 个知识库切片。</p>
+          <p v-else class="question-hint">
+            每次问答默认召回最多 3 个知识库切片。
+          </p>
 
           <el-button
             native-type="submit"
@@ -96,7 +102,7 @@ function formatSimilarity(similarity: number): string {
             :loading="isAnswering"
             :disabled="!canSubmit"
           >
-            {{ isAnswering ? '正在检索并生成答案' : '提交问题' }}
+            {{ isAnswering ? "正在检索并生成答案" : "提交问题" }}
           </el-button>
         </div>
       </form>
@@ -113,7 +119,9 @@ function formatSimilarity(similarity: number): string {
         </div>
 
         <p class="submitted-query">{{ answerResult.query }}</p>
-        <div class="answer-content">{{ answerResult.answer }}</div>
+        <div class="answer-content">
+          <span class="answer-greeting">您好，</span>{{ answerResult.answer }}
+        </div>
       </el-card>
 
       <section class="sources-section" aria-labelledby="sources-title">

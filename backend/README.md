@@ -428,7 +428,7 @@ Content-Type: application/json
 处理流程：
 
 1. 使用现有向量检索服务召回最多 `limit` 个相关切片。
-2. 用 LangChain 提示词把切片组织成带 `[资料1]` 编号的上下文。
+2. 用 LangChain 提示词把切片组织成带 `[资料1]` 编号的内部上下文。
 3. 调用百炼 `qwen3.7-plus` 非思考模式生成答案。
 4. 返回答案以及真正交给模型的全部引用切片。
 
@@ -437,7 +437,7 @@ Content-Type: application/json
 ```json
 {
   "query": "打车费怎么报销？",
-  "answer": "出差期间产生的出租车费用可以报销。[资料1]",
+  "answer": "出差期间产生的出租车费用可以报销。",
   "source_count": 1,
   "sources": [
     {
@@ -451,6 +451,9 @@ Content-Type: application/json
   ]
 }
 ```
+
+回答正文不会输出 `[资料N]` 标记；资料编号只用于模型区分上下文，引用来源由
+前端根据 `sources` 单独展示。
 
 一次正常调用会产生一次 embedding 请求和一次聊天模型请求，并读取 PostgreSQL，
 不会修改数据库。数据库没有已索引切片时接口直接返回固定说明，不调用聊天模型。

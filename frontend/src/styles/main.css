@@ -435,6 +435,11 @@ textarea {
   white-space: pre-wrap;
 }
 
+.answer-greeting {
+  color: #0f766e;
+  font-weight: 700;
+}
+
 .sources-section {
   min-width: 0;
 }

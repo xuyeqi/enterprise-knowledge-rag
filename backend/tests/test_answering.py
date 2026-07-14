@@ -45,7 +45,7 @@ def test_generate_grounded_answer_passes_question_and_context(monkeypatch) -> No
         """记录模型实际收到的消息，并返回本地假答案。"""
 
         received_messages.extend(prompt_value.to_messages())
-        return AIMessage(content="出租车费用可以报销。[资料1]")
+        return AIMessage(content="出租车费用可以报销。")
 
     # RunnableLambda 实现 LangChain Runnable 协议，可以放进 `|` 组合的链中，
     # 但不会创建 HTTP 客户端或产生真实模型费用。
@@ -59,9 +59,10 @@ def test_generate_grounded_answer_passes_question_and_context(monkeypatch) -> No
         )
     )
 
-    assert answer == "出租车费用可以报销。[资料1]"
+    assert answer == "出租车费用可以报销。"
     message_text = "\n".join(str(message.content) for message in received_messages)
     assert "只能根据" in message_text
+    assert "不在回答正文中输出 [资料N] 标记" in message_text
     assert "打车费怎么报销？" in message_text
     assert "[资料1]" in message_text
     assert "expense-policy.md" in message_text
@@ -87,7 +88,7 @@ def test_answer_knowledge_base_returns_sources(monkeypatch) -> None:
 
         received_generation_input["query"] = query
         received_generation_input["chunks"] = chunks
-        return "可以报销。[资料1]"
+        return "可以报销。"
 
     monkeypatch.setattr(
         answering_service,
@@ -108,7 +109,7 @@ def test_answer_knowledge_base_returns_sources(monkeypatch) -> None:
         )
     )
 
-    assert result.answer == "可以报销。[资料1]"
+    assert result.answer == "可以报销。"
     assert result.sources == [chunk]
     assert received_generation_input == {
         "query": "打车费怎么报销？",
@@ -167,7 +168,7 @@ def test_answer_endpoint_returns_answer_and_sources(monkeypatch) -> None:
         assert query == "打车费怎么报销？"
         assert limit == 2
         return KnowledgeAnswer(
-            answer="出租车费用可以报销。[资料1]",
+            answer="出租车费用可以报销。",
             sources=[make_chunk()],
         )
 
@@ -190,7 +191,7 @@ def test_answer_endpoint_returns_answer_and_sources(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.json() == {
         "query": "打车费怎么报销？",
-        "answer": "出租车费用可以报销。[资料1]",
+        "answer": "出租车费用可以报销。",
         "source_count": 1,
         "sources": [
             {
