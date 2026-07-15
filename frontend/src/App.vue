@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 
+import naturalStoneProductsUrl from './assets/natural-stone-products.jpg'
 import BrandLogo from './components/BrandLogo.vue'
 </script>
 
@@ -55,7 +56,16 @@ import BrandLogo from './components/BrandLogo.vue'
             <h1>林希电子商务公司知识库系统</h1>
           </div>
         </div>
-        <span class="environment-badge">Local</span>
+        <figure class="product-showcase">
+          <img
+            :src="naturalStoneProductsUrl"
+            alt="林希电子商务公司的天然石雕件产品陈列"
+          />
+          <figcaption>
+            <span>CORE COLLECTION</span>
+            <strong>天然石饰品</strong>
+          </figcaption>
+        </figure>
       </header>
 
       <RouterView />

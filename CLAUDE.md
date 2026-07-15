@@ -64,6 +64,7 @@
 ├── frontend/
 │   ├── src/
 │   │   ├── api/
+│   │   ├── assets/
 │   │   ├── components/
 │   │   ├── router/
 │   │   ├── stores/
@@ -83,6 +84,7 @@
 
 - 前端目录固定为 `frontend/`，使用 npm 管理依赖并提交 `package-lock.json`。
 - `src/api/` 只放 HTTP 请求和响应类型；页面不直接散落 `fetch` 调用。
+- `src/assets/` 存放需要参与 Vite 构建的本地图片等静态品牌资源；业务组件通过模块导入使用。
 - `src/views/` 放路由页面，`src/components/` 放可复用界面组件，`src/router/` 放路由配置，`src/stores/` 放 Pinia 状态。
 - 开发环境统一请求 `/api/*`，由 Vite 代理到 `http://127.0.0.1:8000`，前端代码不硬编码后端完整地址。
 - 当前使用浏览器原生 `fetch`，在出现统一拦截、取消请求等明确需求前不引入 Axios。
