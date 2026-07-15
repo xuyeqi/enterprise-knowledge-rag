@@ -10,10 +10,12 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
+from pydantic import ValidationError
 
 from app.api import answer as answer_api
 from app.db.session import get_database_session
 from app.main import app
+from app.schemas.answer import KnowledgeAnswerRequest
 from app.services import answering as answering_service
 from app.services.answering import KnowledgeAnswer
 from app.services.retrieval import RetrievedDocumentChunk
@@ -56,6 +58,10 @@ def test_generate_grounded_answer_passes_question_and_context(monkeypatch) -> No
         answering_service.generate_grounded_answer(
             query="打车费怎么报销？",
             chunks=[make_chunk()],
+            history=[
+                ("user", "公司的交通费用政策是什么？"),
+                ("assistant", "公司资料包含交通费用报销规则。"),
+            ],
         )
     )
 
@@ -64,6 +70,8 @@ def test_generate_grounded_answer_passes_question_and_context(monkeypatch) -> No
     assert "只能根据" in message_text
     assert "不在回答正文中输出 [资料N] 标记" in message_text
     assert "打车费怎么报销？" in message_text
+    assert "公司的交通费用政策是什么？" in message_text
+    assert "历史回答不能作为事实依据" in message_text
     assert "[资料1]" in message_text
     assert "expense-policy.md" in message_text
     assert "出租车费用可以报销" in message_text
@@ -74,20 +82,28 @@ def test_answer_knowledge_base_returns_sources(monkeypatch) -> None:
 
     chunk = make_chunk()
     received_generation_input = {}
+    history = [
+        ("user", "公司的交通费用政策是什么？"),
+        ("assistant", "公司资料包含交通费用报销规则。"),
+    ]
 
     async def fake_retrieve_document_chunks(session, *, query: str, limit: int):
         """模拟向量检索并检查服务层传入的参数。"""
 
         assert session is not None
-        assert query == "打车费怎么报销？"
+        assert query == (
+            "历史问题：\n公司的交通费用政策是什么？\n"
+            "当前问题：\n打车费怎么报销？"
+        )
         assert limit == 3
         return [chunk]
 
-    async def fake_generate_grounded_answer(*, query: str, chunks):
+    async def fake_generate_grounded_answer(*, query: str, chunks, history):
         """记录实际交给生成阶段的问题和切片。"""
 
         received_generation_input["query"] = query
         received_generation_input["chunks"] = chunks
+        received_generation_input["history"] = history
         return "可以报销。"
 
     monkeypatch.setattr(
@@ -106,6 +122,7 @@ def test_answer_knowledge_base_returns_sources(monkeypatch) -> None:
             object(),
             query="打车费怎么报销？",
             limit=3,
+            history=history,
         )
     )
 
@@ -114,6 +131,7 @@ def test_answer_knowledge_base_returns_sources(monkeypatch) -> None:
     assert received_generation_input == {
         "query": "打车费怎么报销？",
         "chunks": [chunk],
+        "history": history,
     }
 
 
@@ -161,12 +179,22 @@ def test_answer_endpoint_returns_answer_and_sources(monkeypatch) -> None:
 
         yield object()
 
-    async def fake_answer_knowledge_base(session, *, query: str, limit: int):
+    async def fake_answer_knowledge_base(
+        session,
+        *,
+        query: str,
+        limit: int,
+        history,
+    ):
         """模拟完整问答服务并检查接口传入的参数。"""
 
         assert session is not None
         assert query == "打车费怎么报销？"
         assert limit == 2
+        assert history == [
+            ("user", "公司的交通费用政策是什么？"),
+            ("assistant", "公司资料包含交通费用报销规则。"),
+        ]
         return KnowledgeAnswer(
             answer="出租车费用可以报销。",
             sources=[make_chunk()],
@@ -183,7 +211,17 @@ def test_answer_endpoint_returns_answer_and_sources(monkeypatch) -> None:
         client = TestClient(app)
         response = client.post(
             "/answer",
-            json={"query": "  打车费怎么报销？  ", "limit": 2},
+            json={
+                "query": "  打车费怎么报销？  ",
+                "limit": 2,
+                "history": [
+                    {"role": "user", "content": "公司的交通费用政策是什么？"},
+                    {
+                        "role": "assistant",
+                        "content": "公司资料包含交通费用报销规则。",
+                    },
+                ],
+            },
         )
     finally:
         app.dependency_overrides.clear()
@@ -204,3 +242,38 @@ def test_answer_endpoint_returns_answer_and_sources(monkeypatch) -> None:
             }
         ],
     }
+
+
+def test_answer_request_rejects_incomplete_history() -> None:
+    """确认历史消息必须由完整的 user／assistant 对组成。"""
+
+    try:
+        KnowledgeAnswerRequest.model_validate(
+            {
+                "query": "她的家庭怎么样？",
+                "history": [{"role": "user", "content": "老板是谁？"}],
+            }
+        )
+    except ValidationError as error:
+        assert "complete user/assistant pairs" in str(error)
+    else:
+        raise AssertionError("incomplete history must be rejected")
+
+
+def test_answer_request_rejects_wrong_history_order() -> None:
+    """确认历史消息不能以 assistant 开头或连续使用同一角色。"""
+
+    try:
+        KnowledgeAnswerRequest.model_validate(
+            {
+                "query": "她的家庭怎么样？",
+                "history": [
+                    {"role": "assistant", "content": "老板是侯林希。"},
+                    {"role": "user", "content": "她的家庭怎么样？"},
+                ],
+            }
+        )
+    except ValidationError as error:
+        assert "alternate user then assistant" in str(error)
+    else:
+        raise AssertionError("wrong history order must be rejected")

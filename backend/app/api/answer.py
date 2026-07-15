@@ -26,7 +26,7 @@ async def answer_from_knowledge_base(
     """根据知识库资料回答自然语言问题并返回引用切片。
 
     参数：
-        request：FastAPI 校验后的问题和召回数量。
+        request：FastAPI 校验后的问题、历史对话和召回数量。
         session：FastAPI 通过依赖注入创建的异步数据库会话。
 
     返回值：
@@ -37,6 +37,7 @@ async def answer_from_knowledge_base(
         session,
         query=request.query,
         limit=request.limit,
+        history=[(message.role, message.content) for message in request.history],
     )
     sources = [
         KnowledgeSearchResult(

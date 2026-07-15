@@ -447,8 +447,19 @@ textarea {
   font-size: 12px;
 }
 
-.answer-layout {
+.question-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.conversation-list {
   margin-top: 22px;
+  display: grid;
+  gap: 28px;
+}
+
+.answer-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 22px;
@@ -892,6 +903,16 @@ textarea {
   .question-form__footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .question-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .question-actions .el-button {
+    width: 100%;
+    margin-left: 0;
   }
 
   .status-card__header,

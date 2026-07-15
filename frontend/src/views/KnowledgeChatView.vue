@@ -1,20 +1,24 @@
 <!--
   知识库问答页。
 
-  当前阶段只展示最近一次问题、答案和引用来源。对话历史与流式输出属于阶段 4，
-  这里不提前引入额外状态结构或流式协议。
+  页面在当前浏览器会话中保留最近问答，并把最近五轮完整对话传给后端理解追问。
+  历史不会写入数据库，刷新页面或点击清空对话后即消失。
 -->
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-import { askKnowledgeBase, type KnowledgeAnswerResponse } from "../api/answer";
+import {
+  askKnowledgeBase,
+  type ConversationMessage,
+  type KnowledgeAnswerResponse,
+} from "../api/answer";
 
 const MAX_QUERY_LENGTH = 1000;
 
 const query = ref("");
 const isAnswering = ref(false);
 const errorMessage = ref("");
-const answerResult = ref<KnowledgeAnswerResponse | null>(null);
+const answerResults = ref<KnowledgeAnswerResponse[]>([]);
 
 const canSubmit = computed(() => {
   const normalizedQuery = query.value.trim();
@@ -23,7 +27,17 @@ const canSubmit = computed(() => {
   );
 });
 
-/** 提交清理后的问题，并用本次响应替换上一次问答结果。 */
+/** 把页面中最近五轮完整问答转换为后端约定的交替消息数组。 */
+function buildConversationHistory(): ConversationMessage[] {
+  return answerResults.value.slice(-5).flatMap(
+    (result): ConversationMessage[] => [
+      { role: "user", content: result.query },
+      { role: "assistant", content: result.answer },
+    ],
+  );
+}
+
+/** 提交清理后的问题，并把本次结果追加到当前页面会话。 */
 async function handleAsk(): Promise<void> {
   const normalizedQuery = query.value.trim();
 
@@ -39,16 +53,27 @@ async function handleAsk(): Promise<void> {
 
   isAnswering.value = true;
   errorMessage.value = "";
-  answerResult.value = null;
 
   try {
-    answerResult.value = await askKnowledgeBase(normalizedQuery);
+    const answerResult = await askKnowledgeBase(
+      normalizedQuery,
+      buildConversationHistory(),
+    );
+    answerResults.value.push(answerResult);
+    query.value = "";
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "知识库问答失败，请稍后重试。";
   } finally {
     isAnswering.value = false;
   }
+}
+
+/** 清空当前页面内存中的问答，不发送删除请求，也不修改知识库数据。 */
+function clearConversation(): void {
+  answerResults.value = [];
+  errorMessage.value = "";
+  query.value = "";
 }
 
 /** 把 0～1 的余弦相似度转换为便于阅读的百分比。 */
@@ -92,70 +117,90 @@ function formatSimilarity(similarity: number): string {
             {{ errorMessage }}
           </p>
           <p v-else class="question-hint">
-            每次问答默认召回最多 3 个知识库切片。
+            每次召回最多 1 个切片，并携带最近 5 轮上下文。
           </p>
 
-          <el-button
-            native-type="submit"
-            type="primary"
-            size="large"
-            :loading="isAnswering"
-            :disabled="!canSubmit"
-          >
-            {{ isAnswering ? "正在检索并生成答案" : "提交问题" }}
-          </el-button>
+          <div class="question-actions">
+            <el-button
+              v-if="answerResults.length > 0"
+              native-type="button"
+              size="large"
+              :disabled="isAnswering"
+              @click="clearConversation"
+            >
+              清空对话
+            </el-button>
+            <el-button
+              native-type="submit"
+              type="primary"
+              size="large"
+              :loading="isAnswering"
+              :disabled="!canSubmit"
+            >
+              {{ isAnswering ? "正在检索并生成答案" : "提交问题" }}
+            </el-button>
+          </div>
         </div>
       </form>
     </el-card>
 
-    <div v-if="answerResult" class="answer-layout">
-      <el-card class="answer-card" shadow="never">
-        <div class="answer-card__header">
-          <div>
-            <p class="card-label">GROUNDED ANSWER</p>
-            <h3>知识库回答</h3>
-          </div>
-          <el-tag type="success">{{ answerResult.source_count }} 个来源</el-tag>
-        </div>
-
-        <p class="submitted-query">{{ answerResult.query }}</p>
-        <div class="answer-content">
-          <span class="answer-greeting">您好，</span>{{ answerResult.answer }}
-        </div>
-      </el-card>
-
-      <section class="sources-section" aria-labelledby="sources-title">
-        <div class="sources-heading">
-          <div>
-            <p class="card-label">EVIDENCE</p>
-            <h3 id="sources-title">引用来源</h3>
-          </div>
-          <span>{{ answerResult.source_count }} SOURCES</span>
-        </div>
-
-        <el-empty
-          v-if="answerResult.sources.length === 0"
-          description="本次回答没有可用引用来源"
-        />
-
-        <div v-else class="source-list">
-          <el-card
-            v-for="(source, index) in answerResult.sources"
-            :key="source.chunk_id"
-            class="source-card"
-            shadow="never"
-          >
-            <div class="source-card__header">
-              <strong>[资料{{ index + 1 }}] {{ source.filename }}</strong>
-              <span>{{ formatSimilarity(source.similarity) }}</span>
+    <div v-if="answerResults.length > 0" class="conversation-list">
+      <article
+        v-for="(answerResult, roundIndex) in answerResults"
+        :key="`${roundIndex}-${answerResult.query}`"
+        class="answer-layout"
+      >
+        <el-card class="answer-card" shadow="never">
+          <div class="answer-card__header">
+            <div>
+              <p class="card-label">GROUNDED ANSWER · ROUND {{ roundIndex + 1 }}</p>
+              <h3>知识库回答</h3>
             </div>
-            <p class="source-meta">
-              切片 #{{ source.chunk_index }} · 文档 ID：{{ source.document_id }}
-            </p>
-            <p class="source-content">{{ source.content }}</p>
-          </el-card>
-        </div>
-      </section>
+            <el-tag type="success">{{ answerResult.source_count }} 个来源</el-tag>
+          </div>
+
+          <p class="submitted-query">{{ answerResult.query }}</p>
+          <div class="answer-content">
+            <span class="answer-greeting">您好，</span>{{ answerResult.answer }}
+          </div>
+        </el-card>
+
+        <section
+          class="sources-section"
+          :aria-labelledby="`sources-title-${roundIndex}`"
+        >
+          <div class="sources-heading">
+            <div>
+              <p class="card-label">EVIDENCE</p>
+              <h3 :id="`sources-title-${roundIndex}`">引用来源</h3>
+            </div>
+            <span>{{ answerResult.source_count }} SOURCES</span>
+          </div>
+
+          <el-empty
+            v-if="answerResult.sources.length === 0"
+            description="本次回答没有可用引用来源"
+          />
+
+          <div v-else class="source-list">
+            <el-card
+              v-for="(source, index) in answerResult.sources"
+              :key="source.chunk_id"
+              class="source-card"
+              shadow="never"
+            >
+              <div class="source-card__header">
+                <strong>[资料{{ index + 1 }}] {{ source.filename }}</strong>
+                <span>{{ formatSimilarity(source.similarity) }}</span>
+              </div>
+              <p class="source-meta">
+                切片 #{{ source.chunk_index }} · 文档 ID：{{ source.document_id }}
+              </p>
+              <p class="source-content">{{ source.content }}</p>
+            </el-card>
+          </div>
+        </section>
+      </article>
     </div>
   </section>
 </template>

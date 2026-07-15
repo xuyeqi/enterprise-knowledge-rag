@@ -24,14 +24,22 @@ export interface KnowledgeAnswerResponse {
   sources: AnswerSource[];
 }
 
+/** 一条已经完成的对话消息，用于帮助后端理解指代和追问。 */
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 /**
  * 提交问题并返回答案与引用来源。
  *
  * @param query 用户输入的问题，页面会先去除首尾空白。
- * @param limit 最多召回并交给模型的切片数量，默认与后端一致为 3。
+ * @param history 最近五轮已经完成的对话，默认没有历史消息。
+ * @param limit 最多召回并交给模型的切片数量，当前页面默认使用 1。
  */
 export function askKnowledgeBase(
   query: string,
+  history: ConversationMessage[] = [],
   limit = 1,
 ): Promise<KnowledgeAnswerResponse> {
   return request<KnowledgeAnswerResponse>("/answer", {
@@ -39,6 +47,6 @@ export function askKnowledgeBase(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query, limit }),
+    body: JSON.stringify({ query, history, limit }),
   });
 }
