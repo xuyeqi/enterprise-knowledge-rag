@@ -29,6 +29,16 @@ from app.services.retrieval import RetrievedDocumentChunk, retrieve_document_chu
 # 没有任何已索引切片时直接返回固定答案，不产生模型调用费用。
 EMPTY_KNOWLEDGE_ANSWER = "知识库中没有可用资料，暂时无法回答这个问题。"
 
+# 向量检索即使面对完全无关的问题，也会返回数据库中“相对最接近”的切片。
+# 这里先用代码内常量设置求职版的初始拒答阈值；后续通过评估集观察真实分数分布后，
+# 再决定是否调整数值或开放为可配置的检索参数。
+MIN_RELEVANT_SIMILARITY = 0.5
+
+# 数据库有内容但最高相似度仍低于阈值时返回这条说明，避免把无关切片交给模型猜测。
+NO_RELEVANT_KNOWLEDGE_ANSWER = (
+    "知识库中没有找到与问题足够相关的资料，暂时无法回答这个问题。"
+)
+
 # 历史消息使用只读序列语义。API 层会把 Pydantic 对象转换为这种简单结构，
 # 让业务服务不依赖 HTTP schema，也便于离线测试直接构造历史消息。
 ConversationHistory: TypeAlias = Sequence[
@@ -207,9 +217,22 @@ async def answer_knowledge_base(
     if not chunks:
         return KnowledgeAnswer(answer=EMPTY_KNOWLEDGE_ANSWER, sources=[])
 
+    # 只把达到阈值的切片交给模型和前端。这样既能阻止低相关问题触发模型调用，
+    # 也能避免在存在一个相关切片时，把同批召回的无关切片混入答案来源。
+    relevant_chunks = [
+        chunk
+        for chunk in chunks
+        if chunk.similarity >= MIN_RELEVANT_SIMILARITY
+    ]
+    if not relevant_chunks:
+        return KnowledgeAnswer(
+            answer=NO_RELEVANT_KNOWLEDGE_ANSWER,
+            sources=[],
+        )
+
     answer = await generate_grounded_answer(
         query=query,
-        chunks=chunks,
+        chunks=relevant_chunks,
         history=normalized_history,
     )
-    return KnowledgeAnswer(answer=answer, sources=chunks)
+    return KnowledgeAnswer(answer=answer, sources=relevant_chunks)

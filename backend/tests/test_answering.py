@@ -1,10 +1,12 @@
 """验证 LangChain 知识库问答服务和 POST /answer 接口。
 
 测试会替换真实检索、数据库和聊天模型，因此不会读取 `.env`、调用百炼或访问
-PostgreSQL。它只验证 RAG 编排、提示词上下文、空知识库分支和 HTTP 响应结构。
+PostgreSQL。它只验证 RAG 编排、提示词上下文、空知识库与低相关拒答分支，以及
+HTTP 响应结构。
 """
 
 import asyncio
+from dataclasses import replace
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -78,9 +80,10 @@ def test_generate_grounded_answer_passes_question_and_context(monkeypatch) -> No
 
 
 def test_answer_knowledge_base_returns_sources(monkeypatch) -> None:
-    """确认问答编排把同一批召回切片交给模型并作为来源返回。"""
+    """确认问答编排只把达到相似度阈值的切片交给模型并作为来源返回。"""
 
     chunk = make_chunk()
+    low_similarity_chunk = replace(chunk, similarity=0.49)
     received_generation_input = {}
     history = [
         ("user", "公司的交通费用政策是什么？"),
@@ -96,7 +99,7 @@ def test_answer_knowledge_base_returns_sources(monkeypatch) -> None:
             "当前问题：\n打车费怎么报销？"
         )
         assert limit == 3
-        return [chunk]
+        return [chunk, low_similarity_chunk]
 
     async def fake_generate_grounded_answer(*, query: str, chunks, history):
         """记录实际交给生成阶段的问题和切片。"""
@@ -133,6 +136,47 @@ def test_answer_knowledge_base_returns_sources(monkeypatch) -> None:
         "chunks": [chunk],
         "history": history,
     }
+
+
+def test_answer_knowledge_base_refuses_low_similarity_chunks(monkeypatch) -> None:
+    """确认只有低相关切片时直接拒答，不调用聊天模型也不返回误导性来源。"""
+
+    low_similarity_chunk = replace(make_chunk(), similarity=0.49)
+
+    async def fake_retrieve_document_chunks(session, *, query: str, limit: int):
+        """模拟向量库总能返回结果、但最高相似度仍然不足的真实情况。"""
+
+        assert session is not None
+        assert query == "今天天气怎么样？"
+        assert limit == 3
+        return [low_similarity_chunk]
+
+    async def unexpected_generation_call(*args, **kwargs):
+        """低相关检索结果如果仍触发模型调用，应立即让测试失败。"""
+
+        raise AssertionError("low-similarity retrieval must not call chat model")
+
+    monkeypatch.setattr(
+        answering_service,
+        "retrieve_document_chunks",
+        fake_retrieve_document_chunks,
+    )
+    monkeypatch.setattr(
+        answering_service,
+        "generate_grounded_answer",
+        unexpected_generation_call,
+    )
+
+    result = asyncio.run(
+        answering_service.answer_knowledge_base(
+            object(),
+            query="今天天气怎么样？",
+            limit=3,
+        )
+    )
+
+    assert result.answer == answering_service.NO_RELEVANT_KNOWLEDGE_ANSWER
+    assert result.sources == []
 
 
 def test_answer_knowledge_base_skips_model_when_no_chunks(monkeypatch) -> None:
