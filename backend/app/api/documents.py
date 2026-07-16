@@ -1,6 +1,6 @@
-"""提供文档列表、txt／md 上传预览和正式向量入库接口。
+"""提供文档列表、TXT／Markdown／PDF 上传预览和正式向量入库接口。
 
-两个上传接口共用文件名、大小、编码和空内容校验。列表接口只读取文档摘要；
+两个上传接口共用文件名、大小和内容解析校验。列表接口只读取文档摘要；
 预览接口只返回切片；正式接口会调用百炼并把结果写入 PostgreSQL。
 """
 
@@ -28,7 +28,11 @@ from app.schemas.document import (
     DocumentPreviewResponse,
 )
 from app.services.document_indexing import index_document
-from app.services.text_splitter import split_text
+from app.services.document_parser import (
+    DocumentParseError,
+    ParsedDocument,
+    parse_document,
+)
 
 
 # router 是本文件自定义的路由集合。prefix 会自动加到下面每一个接口路径前。
@@ -41,31 +45,32 @@ MAX_UPLOAD_SIZE_BYTES = 2 * 1024 * 1024
 ALLOWED_FILE_TYPES = {
     ".txt": "text/plain",
     ".md": "text/markdown",
+    ".pdf": "application/pdf",
 }
 
 
 @dataclass(frozen=True)
-class ParsedTextUpload:
-    """保存一份已经通过公共上传校验的文本文档。
+class ParsedDocumentUpload:
+    """保存一份已经通过公共上传校验和解析的文档。
 
-    这个对象由 `read_and_validate_text_upload` 创建，再交给预览接口或正式入库
+    这个对象由 `read_and_parse_document_upload` 创建，再交给预览接口或正式入库
     接口使用。frozen=True 表示创建后不能误改字段，有助于保证两个后续流程
     拿到的是同一份已经校验过的数据。
     """
 
     filename: str
     content_type: str
-    text: str
+    document: ParsedDocument
 
 
-def normalize_and_validate_filename(filename: str | None) -> tuple[str, str]:
-    """清理上传路径，并确认文件扩展名属于 txt 或 md。
+def normalize_and_validate_filename(filename: str | None) -> tuple[str, str, str]:
+    """清理上传路径，并确认文件扩展名属于允许范围。
 
     参数：
         filename：UploadFile 提供的文件名，某些客户端可能不提供。
 
     返回值：
-        二元组 `(安全文件名, 媒体类型)`。
+        三元组 `(安全文件名, 扩展名, 媒体类型)`。
 
     异常：
         缺少文件名时返回 HTTP 400；扩展名不支持时返回 HTTP 415。
@@ -85,27 +90,29 @@ def normalize_and_validate_filename(filename: str | None) -> tuple[str, str]:
     if extension not in ALLOWED_FILE_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="只支持上传 .txt 和 .md 文件",
+            detail="只支持上传 .txt、.md 和 .pdf 文件",
         )
 
-    return safe_filename, ALLOWED_FILE_TYPES[extension]
+    return safe_filename, extension, ALLOWED_FILE_TYPES[extension]
 
 
-async def read_and_validate_text_upload(file: UploadFile) -> ParsedTextUpload:
-    """读取并校验 FastAPI 收到的 txt 或 md 上传文件。
+async def read_and_parse_document_upload(file: UploadFile) -> ParsedDocumentUpload:
+    """读取、校验并解析 FastAPI 收到的知识库文件。
 
     参数：
         file：FastAPI 从 multipart/form-data 请求中解析出的上传文件。
 
     返回值：
-        包含安全文件名、可信媒体类型和 UTF-8 文本的 ParsedTextUpload。
+        包含安全文件名、可信媒体类型和解析结果的 ParsedDocumentUpload。
 
     异常：
-        文件名缺失、扩展名不支持、超过 2 MiB、编码错误或内容为空时抛出
+        文件名缺失、扩展名不支持、超过 2 MiB 或内容无法解析时抛出
         HTTPException，由 FastAPI 转换成对应的 4xx JSON 响应。
     """
 
-    safe_filename, content_type = normalize_and_validate_filename(file.filename)
+    safe_filename, extension, content_type = normalize_and_validate_filename(
+        file.filename
+    )
 
     try:
         # 多读 1 字节是为了区分“刚好 2 MiB”和“已经超过 2 MiB”。
@@ -121,24 +128,17 @@ async def read_and_validate_text_upload(file: UploadFile) -> ParsedTextUpload:
         )
 
     try:
-        # utf-8-sig 兼容普通 UTF-8 和带 BOM 的 UTF-8 文本，并自动移除 BOM。
-        text = raw_content.decode("utf-8-sig")
-    except UnicodeDecodeError as error:
+        parsed_document = parse_document(raw_content, extension)
+    except DocumentParseError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="文件必须使用 UTF-8 编码",
+            detail=str(error),
         ) from error
 
-    if not text.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="上传文件不能为空",
-        )
-
-    return ParsedTextUpload(
+    return ParsedDocumentUpload(
         filename=safe_filename,
         content_type=content_type,
-        text=text,
+        document=parsed_document,
     )
 
 
@@ -187,7 +187,7 @@ async def list_documents(
 async def preview_document(
     file: Annotated[
         UploadFile,
-        File(description="需要预览切片结果的 UTF-8 txt 或 md 文件"),
+        File(description="需要预览切片结果的 TXT、Markdown 或文本型 PDF 文件"),
     ],
 ) -> DocumentPreviewResponse:
     """读取上传文件并返回切片预览，不产生持久化或模型费用。
@@ -195,25 +195,25 @@ async def preview_document(
     执行步骤：
         1. 校验文件名和扩展名。
         2. 最多读取 2 MiB 加 1 字节，判断是否超过大小限制。
-        3. 使用 UTF-8 解码，并拒绝空文本。
-        4. 调用 `split_text`，组装每个切片的顺序、长度和完整内容。
+        3. 按文件类型解码文本或逐页提取 PDF 文本。
+        4. 组装每个切片的顺序、页码、长度和完整内容。
     """
 
-    upload = await read_and_validate_text_upload(file)
-    chunks = split_text(upload.text)
+    upload = await read_and_parse_document_upload(file)
     chunk_previews = [
         ChunkPreview(
             index=index,
-            character_count=len(chunk),
-            content=chunk,
+            page_number=chunk.page_number,
+            character_count=len(chunk.content),
+            content=chunk.content,
         )
-        for index, chunk in enumerate(chunks)
+        for index, chunk in enumerate(upload.document.chunks)
     ]
 
     return DocumentPreviewResponse(
         filename=upload.filename,
         content_type=upload.content_type,
-        character_count=len(upload.text),
+        character_count=upload.document.character_count,
         chunk_count=len(chunk_previews),
         chunks=chunk_previews,
     )
@@ -227,7 +227,7 @@ async def preview_document(
 async def create_document(
     file: Annotated[
         UploadFile,
-        File(description="需要生成向量并写入知识库的 UTF-8 txt 或 md 文件"),
+        File(description="需要生成向量并写入知识库的 TXT、Markdown 或文本型 PDF 文件"),
     ],
     session: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> DocumentIndexResponse:
@@ -242,12 +242,12 @@ async def create_document(
     rollback。两种情况都不会错误地返回“入库成功”。
     """
 
-    upload = await read_and_validate_text_upload(file)
+    upload = await read_and_parse_document_upload(file)
     document = await index_document(
         session,
         filename=upload.filename,
         content_type=upload.content_type,
-        text=upload.text,
+        chunks=upload.document.chunks,
     )
 
     return DocumentIndexResponse(

@@ -18,6 +18,11 @@ class ChunkPreview(BaseModel):
     # index 是切片在原文中的顺序，第一片从 0 开始。
     index: int = Field(description="切片在原文中的顺序，从 0 开始")
 
+    page_number: int | None = Field(
+        default=None,
+        description="PDF 来源页码，从 1 开始；普通文本为 null",
+    )
+
     # character_count 使用 Python len 计算，与当前切片器的长度算法一致。
     character_count: int = Field(description="当前切片包含的字符数")
 

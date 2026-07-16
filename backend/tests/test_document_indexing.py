@@ -10,6 +10,7 @@ import pytest
 
 # 导入整个模块，便于 monkeypatch 临时替换模块内部引用的 embed_texts。
 from app.services import document_indexing as indexing_service
+from app.services.document_parser import ParsedDocumentChunk
 
 
 class FakeAsyncSession:
@@ -62,15 +63,16 @@ def test_embed_chunks_in_batches_uses_ten_item_batches(monkeypatch) -> None:
 def test_index_document_builds_document_and_chunks(monkeypatch) -> None:
     """确认文档、切片顺序、内容和向量会在一次提交中组装完整。"""
 
-    expected_chunks = ["第一段", "第二段"]
+    expected_chunks = [
+        ParsedDocumentChunk(content="第一段", page_number=1),
+        ParsedDocumentChunk(content="第二段", page_number=2),
+    ]
     expected_vectors = [[0.1] * 1024, [0.2] * 1024]
-
-    monkeypatch.setattr(indexing_service, "split_text", lambda text: expected_chunks)
 
     async def fake_embed_chunks(chunks: list[str]) -> list[list[float]]:
         """返回与两个固定切片一一对应的 1024 维假向量。"""
 
-        assert chunks == expected_chunks
+        assert chunks == ["第一段", "第二段"]
         return expected_vectors
 
     monkeypatch.setattr(
@@ -85,7 +87,7 @@ def test_index_document_builds_document_and_chunks(monkeypatch) -> None:
             session,
             filename="policy.md",
             content_type="text/markdown",
-            text="完整文档",
+            chunks=expected_chunks,
         )
     )
 
@@ -96,14 +98,13 @@ def test_index_document_builds_document_and_chunks(monkeypatch) -> None:
     assert document.content_type == "text/markdown"
     assert document.status == "indexed"
     assert [chunk.chunk_index for chunk in document.chunks] == [0, 1]
-    assert [chunk.content for chunk in document.chunks] == expected_chunks
+    assert [chunk.page_number for chunk in document.chunks] == [1, 2]
+    assert [chunk.content for chunk in document.chunks] == ["第一段", "第二段"]
     assert [chunk.embedding for chunk in document.chunks] == expected_vectors
 
 
 def test_index_document_does_not_write_when_embedding_fails(monkeypatch) -> None:
     """确认模型调用失败发生在事务前，不会创建任何数据库写入动作。"""
-
-    monkeypatch.setattr(indexing_service, "split_text", lambda text: ["第一段"])
 
     async def fake_embed_chunks(chunks: list[str]) -> list[list[float]]:
         """模拟百炼鉴权、网络或响应校验失败。"""
@@ -123,7 +124,7 @@ def test_index_document_does_not_write_when_embedding_fails(monkeypatch) -> None
                 session,
                 filename="policy.txt",
                 content_type="text/plain",
-                text="完整文档",
+                chunks=[ParsedDocumentChunk(content="第一段")],
             )
         )
 
@@ -134,8 +135,6 @@ def test_index_document_does_not_write_when_embedding_fails(monkeypatch) -> None
 
 def test_index_document_rolls_back_when_commit_fails(monkeypatch) -> None:
     """确认任意数据库提交错误都会触发 rollback，并把原错误继续抛出。"""
-
-    monkeypatch.setattr(indexing_service, "split_text", lambda text: ["第一段"])
 
     async def fake_embed_chunks(chunks: list[str]) -> list[list[float]]:
         """返回有效假向量，让测试只聚焦数据库失败分支。"""
@@ -155,7 +154,7 @@ def test_index_document_rolls_back_when_commit_fails(monkeypatch) -> None:
                 session,
                 filename="policy.txt",
                 content_type="text/plain",
-                text="完整文档",
+                chunks=[ParsedDocumentChunk(content="第一段")],
             )
         )
 

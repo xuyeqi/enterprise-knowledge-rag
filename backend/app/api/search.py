@@ -56,6 +56,7 @@ async def search_knowledge_base(
             document_id=chunk.document_id,
             filename=chunk.filename,
             chunk_index=chunk.chunk_index,
+            page_number=chunk.page_number,
             content=chunk.content,
             similarity=chunk.similarity,
         )

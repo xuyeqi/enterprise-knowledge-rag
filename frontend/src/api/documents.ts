@@ -32,7 +32,7 @@ export function getDocuments(): Promise<DocumentListItem[]> {
 /**
  * 上传一份 UTF-8 文本文档并等待后端完成向量入库。
  *
- * @param file 用户在上传页选择的 `.txt` 或 `.md` 文件。
+ * @param file 用户在上传页选择的 `.txt`、`.md` 或文本型 `.pdf` 文件。
  * @returns 后端生成的文档 ID、文件名、状态和切片数量。
  */
 export function uploadDocument(file: File): Promise<DocumentIndexResponse> {

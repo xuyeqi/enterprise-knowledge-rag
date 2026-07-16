@@ -117,9 +117,15 @@ def format_knowledge_context(chunks: list[RetrievedDocumentChunk]) -> str:
 
     sections = []
     for source_number, chunk in enumerate(chunks, start=1):
+        page_line = (
+            f"来源页码：第 {chunk.page_number} 页\n"
+            if chunk.page_number is not None
+            else ""
+        )
         sections.append(
             f"[资料{source_number}]\n"
             f"文件名：{chunk.filename}\n"
+            f"{page_line}"
             f"切片位置：{chunk.chunk_index}\n"
             f"内容：{chunk.content}"
         )

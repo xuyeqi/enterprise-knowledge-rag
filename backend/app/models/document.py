@@ -1,6 +1,6 @@
 """定义原始文档和文档切片对应的数据库模型。
 
-一条 Document 记录代表用户上传的一份 txt 或 md 文件；一条 DocumentChunk
+一条 Document 记录代表用户上传的一份 txt、md 或 PDF 文件；一条 DocumentChunk
 记录代表文档切分后的一个文本片段。每个片段保存一份 1024 维 embedding，
 后续用户提问时会用问题向量和这些片段向量计算相似度。
 """
@@ -95,6 +95,10 @@ class DocumentChunk(Base):
 
     # chunk_index 从 0 开始记录切片在原文中的顺序。
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # page_number 保存 PDF 的真实页码，从 1 开始。TXT／Markdown 没有页概念，
+    # 以及迁移前已经存在的切片都保持 NULL。
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # content 保存切片的完整文本。Text 适合长度不固定的长字符串。
     content: Mapped[str] = mapped_column(Text, nullable=False)

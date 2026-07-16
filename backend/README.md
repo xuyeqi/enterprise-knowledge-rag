@@ -10,7 +10,7 @@ FastAPI backend for the enterprise knowledge base RAG project.
 当前文件作用：
 
 - `app/main.py`：FastAPI 应用入口，定义普通健康检查和数据库健康检查接口。
-- `app/api/documents.py`：提供文档列表、txt／md 切片预览和正式向量入库接口。
+- `app/api/documents.py`：提供文档列表、TXT／Markdown／PDF 切片预览和正式向量入库接口。
 - `app/api/search.py`：接收自然语言问题，返回 pgvector 检索到的相关切片。
 - `app/api/answer.py`：组合向量检索和对话模型，返回知识库答案与引用来源。
 - `app/schemas/document.py`：定义上传预览和正式入库接口的 JSON 响应结构。
@@ -22,6 +22,7 @@ FastAPI backend for the enterprise knowledge base RAG project.
 - `app/models/document.py`：定义原始文档和 1024 维文档切片模型。
 - `app/services/embedding.py`：调用百炼，把 1～10 条文本转换为 1024 维向量。
 - `app/services/document_indexing.py`：编排切片、分批向量生成和数据库事务写入。
+- `app/services/document_parser.py`：解析 UTF-8 文本和文本型 PDF，并保留 PDF 页码。
 - `app/services/retrieval.py`：生成问题向量并执行 pgvector 余弦距离检索。
 - `app/services/answering.py`：使用 LangChain 组织提示词并调用百炼生成答案。
 - `app/services/text_splitter.py`：使用 LangChain 按段落和中英文标点递归切片。
@@ -38,7 +39,7 @@ FastAPI backend for the enterprise knowledge base RAG project.
 Current backend scope:
 
 - FastAPI health and database connectivity endpoints.
-- txt／md document preview and vector indexing.
+- TXT／Markdown／PDF document preview and vector indexing.
 - pgvector semantic search.
 - LangChain knowledge answer generation with sources.
 
@@ -165,12 +166,13 @@ uv run alembic current
 uv run alembic upgrade head
 ```
 
-第一次迁移会执行：
+全部迁移会执行：
 
 - 启用 PostgreSQL 的 `vector` 扩展。
 - 创建 `documents` 表。
 - 创建 `document_chunks` 表，其中 `embedding` 为 `vector(1024)`。
 - 创建外键、切片顺序唯一约束和 `document_id` 索引。
+- 为 `document_chunks` 增加可空的 `page_number` 字段；现有文本切片保持 `NULL`。
 
 不要把下面的回滚命令当作测试命令执行：
 
@@ -178,8 +180,8 @@ uv run alembic upgrade head
 uv run alembic downgrade -1
 ```
 
-它会删除两张表及其中的数据，并移除 `vector` 扩展。按照项目规范，执行
-任何 downgrade 前必须先确认影响和备份数据。
+回滚最新迁移会丢失 PDF 页码；继续回滚第一次迁移会删除两张表及其中的数据。
+按照项目规范，执行任何 downgrade 前必须先确认影响和备份数据。
 
 迁移成功后，在 VS Code 的 `rag_db` 查询窗口执行以下只读 SQL：
 
@@ -274,10 +276,11 @@ Content-Type: multipart/form-data
 
 限制：
 
-- 只接受 `.txt` 和 `.md`，扩展名不区分大小写。
+- 只接受 `.txt`、`.md` 和 `.pdf`，扩展名不区分大小写。
 - 文件最大 `2 MB`。
-- 文件必须使用 UTF-8；同时兼容带 BOM 的 UTF-8。
-- 空文件和纯空白文件会被拒绝。
+- TXT／Markdown 必须使用 UTF-8，同时兼容带 BOM 的 UTF-8。
+- PDF 必须包含可提取的文本层；当前不支持加密 PDF、扫描件和 OCR。
+- 空文件、纯空白文件和没有文本层的 PDF 会被拒绝。
 
 接口只读取、解码和切片，不保存文件、不访问数据库、不调用百炼。
 
@@ -293,8 +296,9 @@ uv run uvicorn app.main:app --reload
 http://127.0.0.1:8000/docs
 ```
 
-展开 `POST /documents/preview`，点击 `Try it out`，选择本地 txt 或 md 文件，
-再点击 `Execute`。响应会展示文件名、总字符数、切片数量和每个完整切片。
+展开 `POST /documents/preview`，点击 `Try it out`，选择本地 TXT、Markdown 或
+文本型 PDF，再点击 `Execute`。响应会展示文件名、总字符数、切片数量、
+PDF 页码和每个完整切片。
 
 ## Document Indexing Upload
 
@@ -307,12 +311,13 @@ Content-Type: multipart/form-data
 
 它与预览接口使用相同的文件限制，但处理链路不同：
 
-1. 校验文件名、大小、UTF-8 编码和非空内容。
-2. 使用 LangChain 把原文切成多个文本片段。
-3. 每批最多 10 个切片调用百炼 `text-embedding-v4`，生成 1024 维向量。
-4. 全部向量成功后，通过一次数据库事务写入一条 `documents` 和多条
+1. 校验文件名、大小和内容是否可解析。
+2. TXT／Markdown 使用 UTF-8 解码；PDF 使用 pypdf 逐页提取文本。
+3. 使用 LangChain 把原文切成多个文本片段，PDF 切片同时记录来源页码。
+4. 每批最多 10 个切片调用百炼 `text-embedding-v4`，生成 1024 维向量。
+5. 全部向量成功后，通过一次数据库事务写入一条 `documents` 和多条
    `document_chunks`。
-5. 数据库提交失败时整体回滚，不保留只有部分切片的不完整数据。
+6. 数据库提交失败时整体回滚，不保留只有部分切片的不完整数据。
 
 注意：调用这个接口会产生真实百炼 API 请求，并会向本地 `rag_db` 写入数据。
 建议先用较短的 txt 或 md 文件验证，避免重复上传造成不必要的模型费用和数据。
@@ -340,6 +345,7 @@ LIMIT 5;
 SELECT
     d.filename,
     dc.chunk_index,
+    dc.page_number,
     LEFT(dc.content, 100) AS content_preview,
     vector_dims(dc.embedding) AS embedding_dimension
 FROM document_chunks AS dc
@@ -396,6 +402,7 @@ Content-Type: application/json
       "document_id": "22222222-2222-2222-2222-222222222222",
       "filename": "expense-policy.md",
       "chunk_index": 2,
+      "page_number": null,
       "content": "出差期间产生的出租车费用可以报销。",
       "similarity": 0.91
     }
@@ -451,6 +458,7 @@ Content-Type: application/json
       "document_id": "22222222-2222-2222-2222-222222222222",
       "filename": "expense-policy.md",
       "chunk_index": 2,
+      "page_number": null,
       "content": "出差期间产生的出租车费用可以报销。",
       "similarity": 0.91
     }

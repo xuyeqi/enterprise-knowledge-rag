@@ -41,3 +41,11 @@ def test_document_chunk_has_document_foreign_key() -> None:
     foreign_key_targets = {key.target_fullname for key in document_id_column.foreign_keys}
 
     assert foreign_key_targets == {"documents.id"}
+
+
+def test_document_chunk_page_number_is_nullable() -> None:
+    """确认普通文本和迁移前切片可以不提供 PDF 页码。"""
+
+    page_number_column = DocumentChunk.__table__.columns["page_number"]
+
+    assert page_number_column.nullable is True

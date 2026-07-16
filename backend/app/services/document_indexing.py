@@ -1,7 +1,8 @@
 """编排文档切片、向量生成和数据库持久化。
 
 这个服务位于 HTTP 接口与底层能力之间：接口负责接收文件，`text_splitter`
-负责切片，`embedding` 负责调用百炼，本文件负责把这些步骤按正确顺序串起来，
+和 `document_parser` 负责解析切片，`embedding` 负责调用百炼，本文件负责把
+这些步骤按正确顺序串起来，
 最后使用 SQLAlchemy 把一条文档记录和它的全部切片写入 PostgreSQL。
 """
 
@@ -9,8 +10,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Document, DocumentChunk
+from app.services.document_parser import ParsedDocumentChunk
 from app.services.embedding import MAX_EMBEDDING_BATCH_SIZE, embed_texts
-from app.services.text_splitter import split_text
 
 
 async def embed_chunks_in_batches(chunks: list[str]) -> list[list[float]]:
@@ -48,33 +49,33 @@ async def index_document(
     *,
     filename: str,
     content_type: str,
-    text: str,
+    chunks: list[ParsedDocumentChunk],
 ) -> Document:
-    """将一份已校验的文本文档完整写入向量数据库。
+    """将一份已经解析和校验的文档完整写入向量数据库。
 
     参数：
         session：由 FastAPI 数据库依赖为当前请求创建的异步会话。
         filename：已经移除客户端路径信息的安全文件名。
         content_type：根据文件扩展名确定的媒体类型。
-        text：已经按 UTF-8 解码并确认非空的完整文档文本。
+        chunks：按原文顺序排列的切片；PDF 切片同时携带来源页码。
 
     返回值：
         已成功提交的 Document ORM 对象，可读取 id、status 和 chunks。
 
     执行步骤：
-        1. 把原文切成有顺序的文本片段。
+        1. 提取所有切片正文。
         2. 在数据库事务开始前生成全部 embedding，避免慢速远程请求长期占用
            数据库连接，也避免模型调用中途失败时留下半份数据。
         3. 创建一条 Document 和与切片数量相同的 DocumentChunk。
         4. 一次 commit 提交整份文档；写库失败时 rollback 整体回滚。
     """
 
-    chunks = split_text(text)
-    vectors = await embed_chunks_in_batches(chunks)
+    chunk_contents = [chunk.content for chunk in chunks]
+    vectors = await embed_chunks_in_batches(chunk_contents)
 
     # embed_texts 已逐批校验返回数量。这里再次检查总数，防止未来修改批处理
     # 逻辑时发生切片和向量错位后仍继续写入数据库。
-    if len(vectors) != len(chunks):
+    if len(vectors) != len(chunk_contents):
         raise RuntimeError("embedding count does not match document chunk count")
 
     document = Document(
@@ -88,7 +89,8 @@ async def index_document(
     document.chunks = [
         DocumentChunk(
             chunk_index=index,
-            content=chunk,
+            page_number=chunk.page_number,
+            content=chunk.content,
             embedding=vector,
         )
         for index, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True))

@@ -69,6 +69,7 @@ def test_retrieve_document_chunks_uses_cosine_distance(monkeypatch) -> None:
                 document_id=document_id,
                 filename="expense-policy.md",
                 chunk_index=2,
+                page_number=None,
                 content="出差期间产生的出租车费用可以报销。",
                 cosine_distance=0.2,
             )
@@ -89,6 +90,7 @@ def test_retrieve_document_chunks_uses_cosine_distance(monkeypatch) -> None:
     assert chunks[0].document_id == document_id
     assert chunks[0].filename == "expense-policy.md"
     assert chunks[0].chunk_index == 2
+    assert chunks[0].page_number is None
     assert chunks[0].content == "出差期间产生的出租车费用可以报销。"
     assert chunks[0].similarity == pytest.approx(0.8)
 
@@ -155,6 +157,7 @@ def test_search_endpoint_returns_related_chunks(monkeypatch) -> None:
                 document_id=document_id,
                 filename="expense-policy.md",
                 chunk_index=2,
+                page_number=None,
                 content="出差期间产生的出租车费用可以报销。",
                 similarity=0.91,
             )
@@ -186,6 +189,7 @@ def test_search_endpoint_returns_related_chunks(monkeypatch) -> None:
                 "document_id": str(document_id),
                 "filename": "expense-policy.md",
                 "chunk_index": 2,
+                "page_number": None,
                 "content": "出差期间产生的出租车费用可以报销。",
                 "similarity": 0.91,
             }

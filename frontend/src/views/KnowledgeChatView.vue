@@ -194,7 +194,11 @@ function formatSimilarity(similarity: number): string {
                 <span>{{ formatSimilarity(source.similarity) }}</span>
               </div>
               <p class="source-meta">
-                切片 #{{ source.chunk_index }} · 文档 ID：{{ source.document_id }}
+                切片 #{{ source.chunk_index }}
+                <template v-if="source.page_number !== null">
+                  · 第 {{ source.page_number }} 页
+                </template>
+                · 文档 ID：{{ source.document_id }}
               </p>
               <p class="source-content">{{ source.content }}</p>
             </el-card>

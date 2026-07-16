@@ -16,6 +16,7 @@ from app.api import documents as documents_api
 from app.api.documents import MAX_UPLOAD_SIZE_BYTES
 from app.db.session import get_database_session
 from app.main import app
+from app.services.document_parser import ParsedDocument, ParsedDocumentChunk
 
 
 def test_preview_document_returns_short_markdown_chunk() -> None:
@@ -44,6 +45,7 @@ def test_preview_document_returns_short_markdown_chunk() -> None:
     assert body["chunk_count"] == 1
     assert body["chunks"][0] == {
         "index": 0,
+        "page_number": None,
         "character_count": len(content),
         "content": content,
     }
@@ -66,18 +68,56 @@ def test_preview_document_splits_long_text() -> None:
     assert all(chunk["character_count"] <= 800 for chunk in body["chunks"])
 
 
+def test_preview_pdf_returns_page_number(monkeypatch) -> None:
+    """确认 PDF 预览响应会返回解析服务提供的真实页码。"""
+
+    def fake_parse_document(raw_content: bytes, extension: str) -> ParsedDocument:
+        """替换真实 PDF 解析，只验证上传接口的类型选择和响应组装。"""
+
+        assert raw_content == b"fake pdf"
+        assert extension == ".pdf"
+        return ParsedDocument(
+            character_count=4,
+            chunks=[ParsedDocumentChunk(content="产品介绍", page_number=3)],
+        )
+
+    monkeypatch.setattr(documents_api, "parse_document", fake_parse_document)
+    client = TestClient(app)
+
+    response = client.post(
+        "/documents/preview",
+        files={"file": ("products.pdf", b"fake pdf", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "filename": "products.pdf",
+        "content_type": "application/pdf",
+        "character_count": 4,
+        "chunk_count": 1,
+        "chunks": [
+            {
+                "index": 0,
+                "page_number": 3,
+                "character_count": 4,
+                "content": "产品介绍",
+            }
+        ],
+    }
+
+
 def test_preview_document_rejects_unsupported_extension() -> None:
-    """确认当前阶段不会误接收 PDF 等尚未支持的文件。"""
+    """确认接口不会误接收允许范围之外的文件。"""
 
     client = TestClient(app)
 
     response = client.post(
         "/documents/preview",
-        files={"file": ("report.pdf", b"fake pdf", "application/pdf")},
+        files={"file": ("report.docx", b"fake docx", "application/octet-stream")},
     )
 
     assert response.status_code == 415
-    assert response.json()["detail"] == "只支持上传 .txt 和 .md 文件"
+    assert response.json()["detail"] == "只支持上传 .txt、.md 和 .pdf 文件"
 
 
 def test_preview_document_rejects_file_larger_than_two_megabytes() -> None:
@@ -139,14 +179,15 @@ def test_create_document_returns_persisted_document_summary(monkeypatch) -> None
         *,
         filename: str,
         content_type: str,
-        text: str,
+        chunks,
     ):
         """记录接口传入的数据，并返回模拟提交成功的文档对象。"""
 
         assert session is not None
         assert filename == "policy.md"
         assert content_type == "text/markdown"
-        assert text == "# 报销制度"
+        assert [chunk.content for chunk in chunks] == ["# 报销制度"]
+        assert [chunk.page_number for chunk in chunks] == [None]
         return SimpleNamespace(
             id=document_id,
             filename=filename,

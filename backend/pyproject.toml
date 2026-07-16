@@ -49,6 +49,9 @@ dependencies = [
 
     # FastAPI 解析 multipart/form-data 文件上传请求时需要这个依赖。
     "python-multipart>=0.0.20,<1.0.0",
+
+    # pypdf 用于从文本型 PDF 中逐页提取内容，并保留引用所需的页码。
+    "pypdf>=6.0.0,<7.0.0",
 ]
 
 [project.optional-dependencies]

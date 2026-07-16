@@ -35,6 +35,7 @@ def make_chunk() -> RetrievedDocumentChunk:
         document_id=DOCUMENT_ID,
         filename="expense-policy.md",
         chunk_index=2,
+        page_number=None,
         content="出差期间产生的出租车费用可以报销。",
         similarity=0.91,
     )
@@ -77,6 +78,17 @@ def test_generate_grounded_answer_passes_question_and_context(monkeypatch) -> No
     assert "[资料1]" in message_text
     assert "expense-policy.md" in message_text
     assert "出租车费用可以报销" in message_text
+
+
+def test_format_knowledge_context_includes_pdf_page_number() -> None:
+    """确认 PDF 页码会进入模型上下文，便于答案理解资料位置。"""
+
+    pdf_chunk = replace(make_chunk(), filename="company.pdf", page_number=3)
+
+    context = answering_service.format_knowledge_context([pdf_chunk])
+
+    assert "文件名：company.pdf" in context
+    assert "来源页码：第 3 页" in context
 
 
 def test_answer_knowledge_base_returns_sources(monkeypatch) -> None:
@@ -281,6 +293,7 @@ def test_answer_endpoint_returns_answer_and_sources(monkeypatch) -> None:
                 "document_id": str(DOCUMENT_ID),
                 "filename": "expense-policy.md",
                 "chunk_index": 2,
+                "page_number": None,
                 "content": "出差期间产生的出租车费用可以报销。",
                 "similarity": 0.91,
             }

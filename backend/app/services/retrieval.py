@@ -28,6 +28,7 @@ class RetrievedDocumentChunk:
     document_id: UUID
     filename: str
     chunk_index: int
+    page_number: int | None
     content: str
     similarity: float
 
@@ -76,6 +77,7 @@ async def retrieve_document_chunks(
             DocumentChunk.document_id,
             Document.filename,
             DocumentChunk.chunk_index,
+            DocumentChunk.page_number,
             DocumentChunk.content,
             cosine_distance,
         )
@@ -98,6 +100,7 @@ async def retrieve_document_chunks(
             document_id=row.document_id,
             filename=row.filename,
             chunk_index=row.chunk_index,
+            page_number=row.page_number,
             content=row.content,
             similarity=1.0 - float(row.cosine_distance),
         )

@@ -48,8 +48,8 @@ async function handleUpload(): Promise<void> {
     return
   }
 
-  if (!/\.(txt|md)$/i.test(file.name)) {
-    errorMessage.value = '仅支持 .txt 和 .md 文件。'
+  if (!/\.(txt|md|pdf)$/i.test(file.name)) {
+    errorMessage.value = '仅支持 .txt、.md 和 .pdf 文件。'
     return
   }
 
@@ -78,7 +78,7 @@ async function handleUpload(): Promise<void> {
       <div>
         <p class="section-kicker">DOCUMENT INGESTION</p>
         <h2>上传文档并建立向量索引</h2>
-        <p>支持 UTF-8 编码的 TXT 和 Markdown 文件，单个文件最大 2 MB。</p>
+        <p>支持 UTF-8 编码的 TXT、Markdown 和文本型 PDF，单个文件最大 2 MB。</p>
       </div>
       <span class="phase-number">01</span>
     </div>
@@ -90,7 +90,7 @@ async function handleUpload(): Promise<void> {
             <p class="card-label">SOURCE FILE</p>
             <h3>选择知识库文档</h3>
           </div>
-          <span class="file-limit">TXT / MD · 2 MB</span>
+          <span class="file-limit">TXT / MD / PDF · 2 MB</span>
         </div>
 
         <label class="file-picker">
@@ -102,7 +102,7 @@ async function handleUpload(): Promise<void> {
           </span>
           <input
             type="file"
-            accept=".txt,.md,text/plain,text/markdown"
+            accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf"
             :disabled="isUploading"
             @change="handleFileChange"
           />

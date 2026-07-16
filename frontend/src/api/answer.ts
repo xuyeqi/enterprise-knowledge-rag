@@ -12,6 +12,7 @@ export interface AnswerSource {
   document_id: string;
   filename: string;
   chunk_index: number;
+  page_number: number | null;
   content: string;
   similarity: number;
 }

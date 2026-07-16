@@ -22,7 +22,7 @@
 
 ## 当前状态
 
-项目处于阶段 4：工程化增强。
+项目处于阶段 5：简历亮点增强，并行补齐必要工程能力。
 
 当前已完成：
 
@@ -35,10 +35,11 @@
 - 聊天问答与引用来源前端页面已通过生产构建和真实问题验证。
 - 最近五轮页面级对话历史已经接入，并通过后端测试、前端构建和连续追问验证。
 - 相似度阈值和无相关资料拒答已经接入，并通过后端测试与真实问题验证。
+- 文本型 PDF 解析、逐页切片、页码存储和引用页码展示已经接入，并通过真实链路验证。
 
 下一步：
 
-- 增加 PDF 文档解析能力。
+- 增加简单 RAG 评估样例，为相似度阈值和回答质量提供可重复的验证依据。
 
 ## 本地数据库
 
@@ -147,7 +148,8 @@ uv sync --extra dev
 uv run alembic upgrade head
 ```
 
-第一次迁移会启用 pgvector，并创建 `documents`、`document_chunks` 两张表。
+第一次迁移会启用 pgvector，并创建 `documents`、`document_chunks` 两张表；
+最新迁移会为文档切片增加可空的 PDF 页码字段。
 `document_chunks.embedding` 固定为 `vector(1024)`，与百炼
 `text-embedding-v4` 的 1024 维调用配置保持一致。
 
@@ -184,7 +186,8 @@ uv run python -m scripts.check_embedding
 
 ## 文本切片
 
-后端使用 LangChain `RecursiveCharacterTextSplitter` 处理 txt／md 文本，
+后端使用 LangChain `RecursiveCharacterTextSplitter` 处理 TXT／Markdown 和从
+PDF 每页提取出的文本，
 默认每片最多 800 个字符，相邻切片目标重叠 120 个字符。分隔符优先级包含
 段落、换行和常见中英文标点，以减少句子在不必要的位置被截断。
 
@@ -198,9 +201,9 @@ uv run python -m scripts.check_embedding
 http://127.0.0.1:8000/docs
 ```
 
-使用 `POST /documents/preview` 可以上传不超过 2 MB 的 UTF-8 `.txt` 或 `.md`
-文件，查看切片数量和完整切片内容。这个预览接口不会保存文件、写数据库或
-调用百炼，适合单独检查上传与切片结果。
+使用 `POST /documents/preview` 可以上传不超过 2 MB 的 UTF-8 `.txt`、`.md`
+或文本型 `.pdf` 文件，查看切片数量、PDF 页码和完整切片内容。当前不支持
+加密 PDF、扫描件或 OCR。这个预览接口不会保存文件、写数据库或调用百炼。
 
 ## 学习重点
 

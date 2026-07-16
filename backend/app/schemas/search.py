@@ -60,6 +60,10 @@ class KnowledgeSearchResult(BaseModel):
     document_id: UUID = Field(description="切片所属文档的唯一标识符")
     filename: str = Field(description="切片所属的原始文件名")
     chunk_index: int = Field(description="切片在原文中的顺序，从 0 开始")
+    page_number: int | None = Field(
+        default=None,
+        description="PDF 来源页码，从 1 开始；普通文本为 null",
+    )
     content: str = Field(description="召回切片的完整文本")
     similarity: float = Field(description="余弦相似度，数值越大表示语义越接近")
 
