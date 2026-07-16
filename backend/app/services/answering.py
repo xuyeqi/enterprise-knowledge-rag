@@ -5,8 +5,9 @@
 传入问题、数据库会话和召回数量，不直接处理提示词或百炼客户端。
 """
 
-# Sequence 表达历史消息只需要支持按顺序读取，不允许服务层修改调用方的数据。
-from collections.abc import Sequence
+# AsyncIterator 表达流式答案会异步、逐块地产生内容；Sequence 表达历史消息只需要
+# 支持按顺序读取，不允许服务层修改调用方的数据。
+from collections.abc import AsyncIterator, Sequence
 # dataclass 用来定义服务层返回的轻量结果对象。
 from dataclasses import dataclass
 # lru_cache 让应用复用同一个聊天模型客户端和底层 HTTP 连接。
@@ -79,6 +80,23 @@ class KnowledgeAnswer:
 
     answer: str
     sources: list[RetrievedDocumentChunk]
+
+
+@dataclass(frozen=True)
+class GroundedAnswerContext:
+    """保存检索过滤结果，以及无需调用模型时使用的固定回答。"""
+
+    sources: list[RetrievedDocumentChunk]
+    fallback_answer: str | None = None
+
+
+@dataclass(frozen=True)
+class KnowledgeAnswerStreamEvent:
+    """表示服务层产生的一次流式答案事件。"""
+
+    event: Literal["delta", "sources"]
+    content: str = ""
+    sources: tuple[RetrievedDocumentChunk, ...] = ()
 
 
 @lru_cache
@@ -194,6 +212,79 @@ async def generate_grounded_answer(
     return stripped_answer
 
 
+async def stream_grounded_answer(
+    *,
+    query: str,
+    chunks: list[RetrievedDocumentChunk],
+    history: ConversationHistory | None = None,
+) -> AsyncIterator[str]:
+    """逐块生成严格基于检索资料的答案文本。
+
+    `astream()` 不等待完整答案，而是在模型返回新内容时立即向调用方产出。首块
+    内容会清理模型偶尔产生的开头空白；后续内容保持原样，避免破坏自然段和空格。
+    """
+
+    chain = RAG_PROMPT | get_chat_model() | StrOutputParser()
+    has_content = False
+
+    async for content in chain.astream(
+        {
+            "query": query,
+            "context": format_knowledge_context(chunks),
+            "history": format_conversation_history(history or []),
+        }
+    ):
+        if not content:
+            continue
+
+        if not has_content:
+            content = content.lstrip()
+            if not content:
+                continue
+            has_content = True
+
+        yield content
+
+    if not has_content:
+        raise ChatResponseError("chat model returned an empty answer")
+
+
+async def prepare_grounded_answer(
+    session: AsyncSession,
+    *,
+    query: str,
+    limit: int,
+    history: ConversationHistory | None = None,
+) -> GroundedAnswerContext:
+    """完成检索和阈值过滤，供普通回答与流式回答复用。"""
+
+    normalized_history = history or []
+    retrieval_query = build_retrieval_query(query, normalized_history)
+    chunks = await retrieve_document_chunks(
+        session,
+        query=retrieval_query,
+        limit=limit,
+    )
+    if not chunks:
+        return GroundedAnswerContext(
+            sources=[],
+            fallback_answer=EMPTY_KNOWLEDGE_ANSWER,
+        )
+
+    relevant_chunks = [
+        chunk
+        for chunk in chunks
+        if chunk.similarity >= MIN_RELEVANT_SIMILARITY
+    ]
+    if not relevant_chunks:
+        return GroundedAnswerContext(
+            sources=[],
+            fallback_answer=NO_RELEVANT_KNOWLEDGE_ANSWER,
+        )
+
+    return GroundedAnswerContext(sources=relevant_chunks)
+
+
 async def answer_knowledge_base(
     session: AsyncSession,
     *,
@@ -214,31 +305,56 @@ async def answer_knowledge_base(
     """
 
     normalized_history = history or []
-    retrieval_query = build_retrieval_query(query, normalized_history)
-    chunks = await retrieve_document_chunks(
+    context = await prepare_grounded_answer(
         session,
-        query=retrieval_query,
+        query=query,
         limit=limit,
+        history=normalized_history,
     )
-    if not chunks:
-        return KnowledgeAnswer(answer=EMPTY_KNOWLEDGE_ANSWER, sources=[])
-
-    # 只把达到阈值的切片交给模型和前端。这样既能阻止低相关问题触发模型调用，
-    # 也能避免在存在一个相关切片时，把同批召回的无关切片混入答案来源。
-    relevant_chunks = [
-        chunk
-        for chunk in chunks
-        if chunk.similarity >= MIN_RELEVANT_SIMILARITY
-    ]
-    if not relevant_chunks:
+    if context.fallback_answer is not None:
         return KnowledgeAnswer(
-            answer=NO_RELEVANT_KNOWLEDGE_ANSWER,
-            sources=[],
+            answer=context.fallback_answer,
+            sources=context.sources,
         )
 
     answer = await generate_grounded_answer(
         query=query,
-        chunks=relevant_chunks,
+        chunks=context.sources,
         history=normalized_history,
     )
-    return KnowledgeAnswer(answer=answer, sources=relevant_chunks)
+    return KnowledgeAnswer(answer=answer, sources=context.sources)
+
+
+async def stream_knowledge_base_answer(
+    session: AsyncSession,
+    *,
+    query: str,
+    limit: int,
+    history: ConversationHistory | None = None,
+) -> AsyncIterator[KnowledgeAnswerStreamEvent]:
+    """执行检索，并依次产出答案增量和最终引用来源。"""
+
+    normalized_history = history or []
+    context = await prepare_grounded_answer(
+        session,
+        query=query,
+        limit=limit,
+        history=normalized_history,
+    )
+    if context.fallback_answer is not None:
+        yield KnowledgeAnswerStreamEvent(
+            event="delta",
+            content=context.fallback_answer,
+        )
+    else:
+        async for content in stream_grounded_answer(
+            query=query,
+            chunks=context.sources,
+            history=normalized_history,
+        ):
+            yield KnowledgeAnswerStreamEvent(event="delta", content=content)
+
+    yield KnowledgeAnswerStreamEvent(
+        event="sources",
+        sources=tuple(context.sources),
+    )

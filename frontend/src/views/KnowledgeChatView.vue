@@ -1,14 +1,14 @@
 <!--
   知识库问答页。
 
-  页面在当前浏览器会话中保留最近问答，并把最近五轮完整对话传给后端理解追问。
+  页面只展示最新一次问答，但会在内存中保留最近五轮完整对话并传给后端理解追问。
   历史不会写入数据库，刷新页面或点击清空对话后即消失。
 -->
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 
 import {
-  askKnowledgeBase,
+  askKnowledgeBaseStream,
   type ConversationMessage,
   type KnowledgeAnswerResponse,
 } from "../api/answer";
@@ -18,7 +18,17 @@ const MAX_QUERY_LENGTH = 1000;
 const query = ref("");
 const isAnswering = ref(false);
 const errorMessage = ref("");
-const answerResults = ref<KnowledgeAnswerResponse[]>([]);
+
+interface ConversationRound extends KnowledgeAnswerResponse {
+  status: "streaming" | "complete" | "error";
+}
+
+const answerResults = ref<ConversationRound[]>([]);
+
+/** 页面只渲染最后一次问答，较早结果仅用于构造最近五轮对话上下文。 */
+const latestAnswerResult = computed(
+  () => answerResults.value.at(-1) ?? null,
+);
 
 const canSubmit = computed(() => {
   const normalizedQuery = query.value.trim();
@@ -29,12 +39,15 @@ const canSubmit = computed(() => {
 
 /** 把页面中最近五轮完整问答转换为后端约定的交替消息数组。 */
 function buildConversationHistory(): ConversationMessage[] {
-  return answerResults.value.slice(-5).flatMap(
-    (result): ConversationMessage[] => [
-      { role: "user", content: result.query },
-      { role: "assistant", content: result.answer },
-    ],
-  );
+  return answerResults.value
+    .filter((result) => result.status === "complete")
+    .slice(-5)
+    .flatMap(
+      (result): ConversationMessage[] => [
+        { role: "user", content: result.query },
+        { role: "assistant", content: result.answer },
+      ],
+    );
 }
 
 /** 提交清理后的问题，并把本次结果追加到当前页面会话。 */
@@ -53,15 +66,33 @@ async function handleAsk(): Promise<void> {
 
   isAnswering.value = true;
   errorMessage.value = "";
+  const history = buildConversationHistory();
+  // reactive 返回代理对象。流式回调每次修改 answer 时，Vue 才能立即更新页面；
+  // 如果继续修改 push 前的普通对象，数组虽然是响应式的，但界面不会追踪该引用。
+  const pendingResult = reactive<ConversationRound>({
+    query: normalizedQuery,
+    answer: "",
+    source_count: 0,
+    sources: [],
+    status: "streaming",
+  });
+  answerResults.value.push(pendingResult);
+  query.value = "";
 
   try {
-    const answerResult = await askKnowledgeBase(
+    const answerResult = await askKnowledgeBaseStream(
       normalizedQuery,
-      buildConversationHistory(),
+      history,
+      (content) => {
+        pendingResult.answer += content;
+      },
     );
-    answerResults.value.push(answerResult);
-    query.value = "";
+    Object.assign(pendingResult, answerResult, { status: "complete" });
   } catch (error) {
+    pendingResult.status = "error";
+    if (!pendingResult.answer) {
+      pendingResult.answer = "回答生成失败，请稍后重试。";
+    }
     errorMessage.value =
       error instanceof Error ? error.message : "知识库问答失败，请稍后重试。";
   } finally {
@@ -144,47 +175,56 @@ function formatSimilarity(similarity: number): string {
       </form>
     </el-card>
 
-    <div v-if="answerResults.length > 0" class="conversation-list">
-      <article
-        v-for="(answerResult, roundIndex) in answerResults"
-        :key="`${roundIndex}-${answerResult.query}`"
-        class="answer-layout"
-      >
+    <div v-if="latestAnswerResult" class="conversation-list">
+      <article class="answer-layout">
         <el-card class="answer-card" shadow="never">
           <div class="answer-card__header">
             <div>
-              <p class="card-label">GROUNDED ANSWER · ROUND {{ roundIndex + 1 }}</p>
+              <p class="card-label">GROUNDED ANSWER · LATEST</p>
               <h3>知识库回答</h3>
             </div>
-            <el-tag type="success">{{ answerResult.source_count }} 个来源</el-tag>
+            <el-tag v-if="latestAnswerResult.status === 'streaming'" type="info">
+              正在生成
+            </el-tag>
+            <el-tag v-else-if="latestAnswerResult.status === 'error'" type="danger">
+              生成中断
+            </el-tag>
+            <el-tag v-else type="success">
+              {{ latestAnswerResult.source_count }} 个来源
+            </el-tag>
           </div>
 
-          <p class="submitted-query">{{ answerResult.query }}</p>
+          <p class="submitted-query">{{ latestAnswerResult.query }}</p>
           <div class="answer-content">
-            <span class="answer-greeting">您好，</span>{{ answerResult.answer }}
+            <span class="answer-greeting">您好，</span>{{ latestAnswerResult.answer }}
           </div>
         </el-card>
 
         <section
           class="sources-section"
-          :aria-labelledby="`sources-title-${roundIndex}`"
+          aria-labelledby="sources-title-latest"
         >
           <div class="sources-heading">
             <div>
               <p class="card-label">EVIDENCE</p>
-              <h3 :id="`sources-title-${roundIndex}`">引用来源</h3>
+              <h3 id="sources-title-latest">引用来源</h3>
             </div>
-            <span>{{ answerResult.source_count }} SOURCES</span>
+            <span>{{ latestAnswerResult.source_count }} SOURCES</span>
           </div>
 
           <el-empty
-            v-if="answerResult.sources.length === 0"
+            v-if="latestAnswerResult.status === 'streaming'"
+            description="答案生成完成后展示引用来源"
+          />
+
+          <el-empty
+            v-else-if="latestAnswerResult.sources.length === 0"
             description="本次回答没有可用引用来源"
           />
 
           <div v-else class="source-list">
             <el-card
-              v-for="(source, index) in answerResult.sources"
+              v-for="(source, index) in latestAnswerResult.sources"
               :key="source.chunk_id"
               class="source-card"
               shadow="never"

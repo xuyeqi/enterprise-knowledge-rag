@@ -476,3 +476,39 @@ Content-Type: application/json
 不会修改数据库。数据库没有已索引切片，或者召回切片全部低于初始相似度阈值
 `0.5` 时，接口直接返回对应的固定说明，不调用聊天模型，也不返回低相关来源。
 阈值是求职版的初始值，后续需要结合 RAG 评估集和真实问题分数分布继续调试。
+
+## Streaming Knowledge Answer
+
+流式问答接口保留与普通接口相同的请求结构：
+
+```http
+POST /answer/stream
+Content-Type: application/json
+Accept: text/event-stream
+```
+
+接口先执行相同的历史校验、向量检索和相似度过滤，再使用 LangChain
+`astream()` 逐块生成答案。响应采用 SSE 协议，事件顺序如下：
+
+```text
+event: delta
+data: {"content":"出差期间"}
+
+event: delta
+data: {"content":"可以报销。"}
+
+event: sources
+data: {"sources":[...]}
+
+event: done
+data: {}
+```
+
+- `delta`：本次新生成的答案文本，前端应按顺序追加，不能覆盖之前内容。
+- `sources`：生成结束后的完整引用来源；固定拒答时返回空数组。
+- `done`：本次流正常结束。
+- `error`：流开始后模型或上游服务异常，前端应停止读取并保留已生成文本。
+
+浏览器使用 `fetch` 发送 POST 请求，并通过 `response.body.getReader()` 读取响应。
+`EventSource` 只适合 GET，因此当前页面没有使用它。普通 `POST /answer` 继续保留，
+用于非流式调用和兼容现有客户端。

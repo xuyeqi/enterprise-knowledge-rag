@@ -1,4 +1,4 @@
-"""验证 LangChain 知识库问答服务和 POST /answer 接口。
+"""验证 LangChain 知识库问答服务、普通接口和 SSE 流式接口。
 
 测试会替换真实检索、数据库和聊天模型，因此不会读取 `.env`、调用百炼或访问
 PostgreSQL。它只验证 RAG 编排、提示词上下文、空知识库与低相关拒答分支，以及
@@ -19,7 +19,11 @@ from app.db.session import get_database_session
 from app.main import app
 from app.schemas.answer import KnowledgeAnswerRequest
 from app.services import answering as answering_service
-from app.services.answering import KnowledgeAnswer
+from app.services.answering import (
+    GroundedAnswerContext,
+    KnowledgeAnswer,
+    KnowledgeAnswerStreamEvent,
+)
 from app.services.retrieval import RetrievedDocumentChunk
 
 
@@ -227,6 +231,118 @@ def test_answer_knowledge_base_skips_model_when_no_chunks(monkeypatch) -> None:
     assert result.sources == []
 
 
+def test_stream_knowledge_base_answer_yields_deltas_then_sources(monkeypatch) -> None:
+    """确认流式编排先逐块产出答案，最后才返回引用来源。"""
+
+    chunk = make_chunk()
+
+    async def fake_prepare_grounded_answer(
+        session,
+        *,
+        query: str,
+        limit: int,
+        history,
+    ):
+        """模拟已经完成检索和相似度过滤的上下文。"""
+
+        assert session is not None
+        assert query == "打车费怎么报销？"
+        assert limit == 1
+        assert history == []
+        return GroundedAnswerContext(sources=[chunk])
+
+    async def fake_stream_grounded_answer(*, query: str, chunks, history):
+        """模拟模型分两次返回答案。"""
+
+        assert query == "打车费怎么报销？"
+        assert chunks == [chunk]
+        assert history == []
+        yield "出租车费用"
+        yield "可以报销。"
+
+    monkeypatch.setattr(
+        answering_service,
+        "prepare_grounded_answer",
+        fake_prepare_grounded_answer,
+    )
+    monkeypatch.setattr(
+        answering_service,
+        "stream_grounded_answer",
+        fake_stream_grounded_answer,
+    )
+
+    async def collect_events():
+        """把异步生成器内容收集为列表，便于断言事件顺序。"""
+
+        return [
+            event
+            async for event in answering_service.stream_knowledge_base_answer(
+                object(),
+                query="打车费怎么报销？",
+                limit=1,
+            )
+        ]
+
+    events = asyncio.run(collect_events())
+
+    assert events == [
+        KnowledgeAnswerStreamEvent(event="delta", content="出租车费用"),
+        KnowledgeAnswerStreamEvent(event="delta", content="可以报销。"),
+        KnowledgeAnswerStreamEvent(event="sources", sources=(chunk,)),
+    ]
+
+
+def test_stream_knowledge_base_answer_streams_fallback_without_model(
+    monkeypatch,
+) -> None:
+    """确认拒答分支也遵守流式事件协议，但不会调用聊天模型。"""
+
+    async def fake_prepare_grounded_answer(*args, **kwargs):
+        """模拟没有达到阈值的知识库检索结果。"""
+
+        return GroundedAnswerContext(
+            sources=[],
+            fallback_answer=answering_service.NO_RELEVANT_KNOWLEDGE_ANSWER,
+        )
+
+    async def unexpected_stream_call(*args, **kwargs):
+        """拒答分支如果调用模型，应立即让测试失败。"""
+
+        raise AssertionError("fallback answer must not call chat model")
+        yield
+
+    monkeypatch.setattr(
+        answering_service,
+        "prepare_grounded_answer",
+        fake_prepare_grounded_answer,
+    )
+    monkeypatch.setattr(
+        answering_service,
+        "stream_grounded_answer",
+        unexpected_stream_call,
+    )
+
+    async def collect_events():
+        return [
+            event
+            async for event in answering_service.stream_knowledge_base_answer(
+                object(),
+                query="今天天气怎么样？",
+                limit=1,
+            )
+        ]
+
+    events = asyncio.run(collect_events())
+
+    assert events == [
+        KnowledgeAnswerStreamEvent(
+            event="delta",
+            content=answering_service.NO_RELEVANT_KNOWLEDGE_ANSWER,
+        ),
+        KnowledgeAnswerStreamEvent(event="sources"),
+    ]
+
+
 def test_answer_endpoint_returns_answer_and_sources(monkeypatch) -> None:
     """确认 POST /answer 返回清理后的问题、答案和完整引用来源。"""
 
@@ -299,6 +415,97 @@ def test_answer_endpoint_returns_answer_and_sources(monkeypatch) -> None:
             }
         ],
     }
+
+
+def test_stream_answer_endpoint_returns_sse_events(monkeypatch) -> None:
+    """确认 POST /answer/stream 返回答案增量、来源和结束事件。"""
+
+    async def fake_database_session():
+        """向 FastAPI 提供假会话，阻止测试连接真实数据库。"""
+
+        yield object()
+
+    async def fake_stream_knowledge_base_answer(
+        session,
+        *,
+        query: str,
+        limit: int,
+        history,
+    ):
+        """模拟服务层流式事件并检查接口参数转换。"""
+
+        assert session is not None
+        assert query == "打车费怎么报销？"
+        assert limit == 1
+        assert history == []
+        yield KnowledgeAnswerStreamEvent(event="delta", content="可以")
+        yield KnowledgeAnswerStreamEvent(event="delta", content="报销。")
+        yield KnowledgeAnswerStreamEvent(
+            event="sources",
+            sources=(make_chunk(),),
+        )
+
+    app.dependency_overrides[get_database_session] = fake_database_session
+    monkeypatch.setattr(
+        answer_api,
+        "stream_knowledge_base_answer",
+        fake_stream_knowledge_base_answer,
+    )
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/answer/stream",
+            json={"query": "打车费怎么报销？", "limit": 1},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert 'event: delta\ndata: {"content":"可以"}\n\n' in response.text
+    assert 'event: delta\ndata: {"content":"报销。"}\n\n' in response.text
+    assert 'event: sources\ndata: {"sources":[' in response.text
+    assert f'"chunk_id":"{CHUNK_ID}"' in response.text
+    assert "event: done\ndata: {}\n\n" in response.text
+
+
+def test_stream_answer_endpoint_returns_error_event(monkeypatch) -> None:
+    """确认流已经开始后发生异常时，前端仍能收到稳定错误事件。"""
+
+    async def fake_database_session():
+        yield object()
+
+    async def failing_stream(*args, **kwargs):
+        """模拟模型返回首块内容后连接中断。"""
+
+        yield KnowledgeAnswerStreamEvent(event="delta", content="部分答案")
+        raise RuntimeError("private upstream error")
+
+    app.dependency_overrides[get_database_session] = fake_database_session
+    monkeypatch.setattr(
+        answer_api,
+        "stream_knowledge_base_answer",
+        failing_stream,
+    )
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/answer/stream",
+            json={"query": "测试中断"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert 'event: delta\ndata: {"content":"部分答案"}\n\n' in response.text
+    assert (
+        'event: error\ndata: {"message":"回答生成中断，请稍后重试。"}\n\n'
+        in response.text
+    )
+    assert "private upstream error" not in response.text
+    assert "event: done" not in response.text
 
 
 def test_answer_request_rejects_incomplete_history() -> None:

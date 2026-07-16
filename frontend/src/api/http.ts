@@ -7,7 +7,11 @@
 
 const API_PREFIX = '/api'
 
-export async function request<T>(path: string, options?: RequestInit): Promise<T> {
+/** 发送请求并在成功时保留原始 Response，供流式接口读取 response.body。 */
+export async function requestResponse(
+  path: string,
+  options?: RequestInit,
+): Promise<Response> {
   const response = await fetch(`${API_PREFIX}${path}`, options)
 
   if (!response.ok) {
@@ -24,6 +28,12 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
 
     throw new Error(detail || `请求失败：HTTP ${response.status}`)
   }
+
+  return response
+}
+
+export async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await requestResponse(path, options)
 
   return (await response.json()) as T
 }
