@@ -48,6 +48,24 @@ class EvaluationCheck:
     detail: str
 
 
+@dataclass(frozen=True)
+class TuningResult:
+    """保存一组相似度阈值和 Top-K 在全部检索样例上的表现。"""
+
+    threshold: float
+    limit: int
+    passed: int
+    total: int
+    false_rejections: int
+    false_acceptances: int
+
+    @property
+    def accuracy(self) -> float:
+        """返回通过样例占比，供终端展示和推荐规则比较。"""
+
+        return self.passed / self.total
+
+
 def parse_term_groups(raw_groups: Any, *, field_name: str) -> tuple[tuple[str, ...], ...]:
     """校验 JSON 中的关键词组，并转换为不可变元组。
 
@@ -132,6 +150,37 @@ def load_evaluation_cases(path: Path) -> tuple[float, int, list[EvaluationCase]]
     return threshold, limit, cases
 
 
+def load_tuning_candidates(path: Path) -> tuple[tuple[float, ...], tuple[int, ...]]:
+    """读取并校验要比较的相似度阈值和 Top-K 候选值。
+
+    候选参数与问题放在同一个 JSON 中，方便代码评审时同时看到“用什么题评估”
+    和“比较哪些参数”。排序和去重在这里统一完成，后续输出表格保持稳定。
+    """
+
+    with path.open(encoding="utf-8") as cases_file:
+        payload = json.load(cases_file)
+
+    tuning = payload.get("tuning")
+    if not isinstance(tuning, dict):
+        raise ValueError("tuning must be an object")
+
+    raw_thresholds = tuning.get("thresholds")
+    raw_limits = tuning.get("limits")
+    if not isinstance(raw_thresholds, list) or not raw_thresholds:
+        raise ValueError("tuning.thresholds must be a non-empty list")
+    if not isinstance(raw_limits, list) or not raw_limits:
+        raise ValueError("tuning.limits must be a non-empty list")
+
+    thresholds = tuple(sorted({float(value) for value in raw_thresholds}))
+    limits = tuple(sorted({int(value) for value in raw_limits}))
+    if any(not 0 <= value <= 1 for value in thresholds):
+        raise ValueError("each tuning threshold must be between 0 and 1")
+    if any(not 1 <= value <= 10 for value in limits):
+        raise ValueError("each tuning limit must be between 1 and 10")
+
+    return thresholds, limits
+
+
 def find_missing_term_groups(
     text: str,
     term_groups: tuple[tuple[str, ...], ...],
@@ -203,6 +252,98 @@ def evaluate_search_response(
     return EvaluationCheck(passed, detail)
 
 
+def evaluate_tuning_grid(
+    cases: list[EvaluationCase],
+    search_responses: dict[str, dict[str, Any]],
+    *,
+    thresholds: tuple[float, ...],
+    limits: tuple[int, ...],
+) -> list[TuningResult]:
+    """复用同一批检索结果，计算每组阈值和 Top-K 的离线表现。
+
+    参数：
+        cases：包含正向问题和预期拒答问题的完整评估集。
+        search_responses：按样例 ID 保存的 ``POST /search`` 原始响应。
+        thresholds：要模拟的相似度阈值。
+        limits：要模拟的 Top-K，也就是只保留前几个召回切片。
+
+    返回值：
+        按阈值、Top-K 顺序排列的结果。正向问题失败记为误拒答，预期拒答问题
+        失败记为错误放行，便于区分“找不到资料”和“把无关资料交给模型”。
+    """
+
+    tuning_results: list[TuningResult] = []
+    for threshold in thresholds:
+        for limit in limits:
+            passed = 0
+            false_rejections = 0
+            false_acceptances = 0
+
+            for case in cases:
+                if case.case_id not in search_responses:
+                    raise ValueError(f"missing search response for case {case.case_id}")
+
+                response = search_responses[case.case_id]
+                raw_results = response.get("results")
+                if not isinstance(raw_results, list):
+                    raise ValueError(
+                        f"case {case.case_id} response must contain results"
+                    )
+
+                check = evaluate_search_response(
+                    case,
+                    {"results": raw_results[:limit]},
+                    threshold=threshold,
+                )
+                if check.passed:
+                    passed += 1
+                elif case.expected_refusal:
+                    false_acceptances += 1
+                else:
+                    false_rejections += 1
+
+            tuning_results.append(
+                TuningResult(
+                    threshold=threshold,
+                    limit=limit,
+                    passed=passed,
+                    total=len(cases),
+                    false_rejections=false_rejections,
+                    false_acceptances=false_acceptances,
+                )
+            )
+
+    return tuning_results
+
+
+def select_recommended_tuning_result(
+    results: list[TuningResult],
+    *,
+    baseline_threshold: float,
+    baseline_limit: int,
+) -> TuningResult:
+    """从扫描结果中选择风险较低且无需无意义改参的推荐组合。
+
+    排序依次考虑：通过样例数量越多越好；错误放行越少越好；与当前阈值、Top-K
+    的距离越小越好；最后在完全相同时选择较小 Top-K，减少模型上下文和费用。
+    这个推荐只用于生成调试结论，不会自动修改问答服务常量。
+    """
+
+    if not results:
+        raise ValueError("tuning results must not be empty")
+
+    return max(
+        results,
+        key=lambda result: (
+            result.passed,
+            -result.false_acceptances,
+            -abs(result.threshold - baseline_threshold),
+            -abs(result.limit - baseline_limit),
+            -result.limit,
+        ),
+    )
+
+
 def evaluate_answer_response(
     case: EvaluationCase,
     response: dict[str, Any],
@@ -263,6 +404,76 @@ def print_check(label: str, check: EvaluationCheck) -> None:
     print(f"  {label}: {status}｜{check.detail}")
 
 
+def run_tuning(
+    *,
+    base_url: str,
+    cases_path: Path,
+    timeout: float,
+    baseline_threshold: float,
+    baseline_limit: int,
+    cases: list[EvaluationCase],
+) -> int:
+    """请求每个问题的最大 Top-K，并离线比较所有候选参数组合。"""
+
+    thresholds, limits = load_tuning_candidates(cases_path)
+    maximum_limit = max(limits)
+    normalized_base_url = base_url.rstrip("/")
+    search_responses: dict[str, dict[str, Any]] = {}
+
+    print(
+        f"评估集：{cases_path}\n"
+        f"模式：tune｜样例：{len(cases)}｜"
+        f"阈值候选：{len(thresholds)}｜Top-K 候选：{len(limits)}"
+    )
+    print(f"每个问题只请求一次 Top-{maximum_limit}，其余组合在本地计算。")
+
+    for index, case in enumerate(cases, start=1):
+        print(f"[{index}/{len(cases)}] 检索 {case.case_id}｜{case.question}")
+        try:
+            search_responses[case.case_id] = post_json(
+                f"{normalized_base_url}/search",
+                {"query": case.question, "limit": maximum_limit},
+                timeout=timeout,
+            )
+        except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            print(f"  FAIL｜{exc}")
+            return 1
+
+    results = evaluate_tuning_grid(
+        cases,
+        search_responses,
+        thresholds=thresholds,
+        limits=limits,
+    )
+    recommendation = select_recommended_tuning_result(
+        results,
+        baseline_threshold=baseline_threshold,
+        baseline_limit=baseline_limit,
+    )
+
+    print("\n阈值    Top-K  通过率   误拒答  错误放行")
+    for result in results:
+        print(
+            f"{result.threshold:<7.2f} "
+            f"{result.limit:<6} "
+            f"{result.passed}/{result.total} "
+            f"({result.accuracy:>4.0%})   "
+            f"{result.false_rejections:<7} "
+            f"{result.false_acceptances}"
+        )
+
+    print(
+        "\n推荐组合："
+        f"阈值 {recommendation.threshold:.2f}，Top-K {recommendation.limit}｜"
+        f"通过率 {recommendation.passed}/{recommendation.total} "
+        f"({recommendation.accuracy:.0%})｜"
+        f"误拒答 {recommendation.false_rejections}｜"
+        f"错误放行 {recommendation.false_acceptances}"
+    )
+    print("说明：该结果只提供调试依据，不会自动修改当前问答参数。")
+    return 0
+
+
 def run_evaluation(
     *,
     base_url: str,
@@ -276,6 +487,16 @@ def run_evaluation(
     normalized_base_url = base_url.rstrip("/")
     search_passed = 0
     answer_passed = 0
+
+    if mode == "tune":
+        return run_tuning(
+            base_url=base_url,
+            cases_path=cases_path,
+            timeout=timeout,
+            baseline_threshold=threshold,
+            baseline_limit=limit,
+            cases=cases,
+        )
 
     print(
         f"评估集：{cases_path}\n"
@@ -342,8 +563,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode",
         required=True,
-        choices=("search", "full"),
-        help="search 只评估检索；full 同时评估检索和非流式回答",
+        choices=("search", "full", "tune"),
+        help=(
+            "search 只评估当前检索；full 同时评估回答；"
+            "tune 比较多组阈值和 Top-K"
+        ),
     )
     parser.add_argument(
         "--base-url",

@@ -10,7 +10,10 @@ from scripts.evaluate_rag import (
     EvaluationCase,
     evaluate_answer_response,
     evaluate_search_response,
+    evaluate_tuning_grid,
     load_evaluation_cases,
+    load_tuning_candidates,
+    select_recommended_tuning_result,
 )
 
 
@@ -32,9 +35,12 @@ def test_default_evaluation_cases_are_valid() -> None:
     cases_path = Path(__file__).resolve().parents[1] / "evaluation" / "rag_cases.json"
 
     threshold, limit, cases = load_evaluation_cases(cases_path)
+    thresholds, limits = load_tuning_candidates(cases_path)
 
     assert threshold == 0.5
     assert limit == 3
+    assert thresholds == (0.45, 0.5, 0.55, 0.6, 0.65)
+    assert limits == (1, 3, 5)
     assert len(cases) == 5
     assert len({case.case_id for case in cases}) == len(cases)
 
@@ -114,3 +120,58 @@ def test_refusal_requires_no_sources_and_refusal_wording() -> None:
 
     assert passed_check.passed is True
     assert hallucinated_check.passed is False
+
+
+def test_tuning_grid_reports_errors_and_recommends_best_parameters() -> None:
+    """确认参数扫描区分误拒答和错误放行，并推荐通过率最高的组合。"""
+
+    positive_case = make_positive_case()
+    refusal_case = EvaluationCase(
+        case_id="unrelated",
+        question="Python 的 GIL 是什么？",
+        expected_refusal=True,
+        expected_retrieval_terms=(),
+        expected_answer_terms=(),
+    )
+    search_responses = {
+        positive_case.case_id: {
+            "results": [
+                {"content": "公司经营跨境电商。", "similarity": 0.8},
+                {"content": "核心产品是天然石饰品。", "similarity": 0.75},
+            ]
+        },
+        refusal_case.case_id: {
+            "results": [
+                {"content": "公司知识库使用 AI 工具。", "similarity": 0.55}
+            ]
+        },
+    }
+
+    results = evaluate_tuning_grid(
+        [positive_case, refusal_case],
+        search_responses,
+        thresholds=(0.5, 0.7),
+        limits=(1, 2),
+    )
+    recommendation = select_recommended_tuning_result(
+        results,
+        baseline_threshold=0.5,
+        baseline_limit=3,
+    )
+
+    threshold_05_limit_2 = next(
+        result
+        for result in results
+        if result.threshold == 0.5 and result.limit == 2
+    )
+    threshold_07_limit_1 = next(
+        result
+        for result in results
+        if result.threshold == 0.7 and result.limit == 1
+    )
+
+    assert threshold_05_limit_2.false_acceptances == 1
+    assert threshold_07_limit_1.false_rejections == 1
+    assert recommendation.threshold == 0.7
+    assert recommendation.limit == 2
+    assert recommendation.passed == 2

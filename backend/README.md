@@ -533,10 +533,22 @@ uv run python -m scripts.evaluate_rag --mode search
 uv run python -m scripts.evaluate_rag --mode full
 ```
 
+扫描多组相似度阈值和 Top-K，并输出推荐组合：
+
+```powershell
+uv run python -m scripts.evaluate_rag --mode tune
+```
+
 `search` 模式会为每个问题调用一次真实 embedding；`full` 模式还会为每个问题
 再次调用 embedding，并为达到相似度阈值的问题调用聊天模型，因此会产生少量百炼
 额度消耗。脚本分别输出检索通过率、回答通过率和整体通过率；任一检查失败时返回
 非零退出码，便于后续接入自动化验证。
+
+`tune` 模式读取评估集中的 `tuning.thresholds` 和 `tuning.limits`。它为每个问题
+只请求一次候选值中最大的 Top-K，再在本地模拟全部参数组合，不会按组合数量重复
+调用 embedding，也不会调用聊天模型。输出中的“误拒答”表示相关问题未通过，
+“错误放行”表示无关问题仍有切片高于阈值。推荐组合优先考虑通过率和减少错误放行，
+但不会自动修改 `app/services/answering.py` 中的当前参数。
 
 评估集中的关键词组支持同义表达：同一组内命中任意一个词即可，不同组必须全部
 命中。调整问题或关键词时应以知识库原文和真实回答为依据，不能为了让分数通过而
