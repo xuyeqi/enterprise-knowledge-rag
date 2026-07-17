@@ -27,6 +27,8 @@ FastAPI backend for the enterprise knowledge base RAG project.
 - `app/services/answering.py`：使用 LangChain 组织提示词并调用百炼生成答案。
 - `app/services/text_splitter.py`：使用 LangChain 按段落和中英文标点递归切片。
 - `scripts/check_embedding.py`：由开发者手动执行一次真实 embedding 调用。
+- `scripts/evaluate_rag.py`：读取固定问题集，统计检索、回答和拒答是否符合预期。
+- `evaluation/rag_cases.json`：保存可重复执行的 RAG 评估问题与期望关键词。
 - `migrations/`：保存 Alembic 数据库结构版本和第一次建表迁移。
 - `alembic.ini`：指定 Alembic 的迁移脚本位置和基础行为。
 - `app/__init__.py`：把 `app` 目录标记为 Python 包，方便用 `from app.main import app` 导入。
@@ -512,3 +514,30 @@ data: {}
 浏览器使用 `fetch` 发送 POST 请求，并通过 `response.body.getReader()` 读取响应。
 `EventSource` 只适合 GET，因此当前页面没有使用它。普通 `POST /answer` 继续保留，
 用于非流式调用和兼容现有客户端。
+
+## 简单 RAG 评估
+
+评估前需要满足两个条件：FastAPI 和 PostgreSQL 已启动；
+`linxi_company_knowledge.md` 已通过文档上传接口完成向量入库。评估脚本只读取现有
+知识库，不上传文件、不写数据库。
+
+先只评估检索和拒答阈值：
+
+```powershell
+uv run python -m scripts.evaluate_rag --mode search
+```
+
+再执行完整评估，额外检查模型答案关键词和引用来源：
+
+```powershell
+uv run python -m scripts.evaluate_rag --mode full
+```
+
+`search` 模式会为每个问题调用一次真实 embedding；`full` 模式还会为每个问题
+再次调用 embedding，并为达到相似度阈值的问题调用聊天模型，因此会产生少量百炼
+额度消耗。脚本分别输出检索通过率、回答通过率和整体通过率；任一检查失败时返回
+非零退出码，便于后续接入自动化验证。
+
+评估集中的关键词组支持同义表达：同一组内命中任意一个词即可，不同组必须全部
+命中。调整问题或关键词时应以知识库原文和真实回答为依据，不能为了让分数通过而
+删除关键事实约束。

@@ -1,0 +1,65 @@
+{
+  "relevance_threshold": 0.5,
+  "limit": 3,
+  "cases": [
+    {
+      "id": "company_business",
+      "question": "林希电子商务公司主要做什么？",
+      "expected_refusal": false,
+      "expected_retrieval_terms": [
+        ["跨境电商"],
+        ["天然石饰品"]
+      ],
+      "expected_answer_terms": [
+        ["跨境电商"],
+        ["天然石", "饰品"]
+      ]
+    },
+    {
+      "id": "company_owner",
+      "question": "公司的老板是谁？",
+      "expected_refusal": false,
+      "expected_retrieval_terms": [
+        ["侯林希", "林希总", "侯总"]
+      ],
+      "expected_answer_terms": [
+        ["侯林希", "林希总", "侯总"]
+      ]
+    },
+    {
+      "id": "stone_medical_claim",
+      "question": "天然石有治疗疾病的功效吗？",
+      "expected_refusal": false,
+      "expected_retrieval_terms": [
+        ["治疗", "医疗", "医学"],
+        ["不宣称", "不得", "不等同"]
+      ],
+      "expected_answer_terms": [
+        ["治疗", "医疗", "医学"],
+        ["不", "不能", "没有"]
+      ]
+    },
+    {
+      "id": "leader_status_boundary",
+      "question": "公司已经被认定为大连龙头企业了吗？",
+      "expected_refusal": false,
+      "expected_retrieval_terms": [
+        ["龙头企业"],
+        ["目标", "不代表", "未"]
+      ],
+      "expected_answer_terms": [
+        ["龙头企业"],
+        ["目标", "未", "没有", "不代表"]
+      ]
+    },
+    {
+      "id": "unrelated_python_question",
+      "question": "Python 的 GIL 是什么？",
+      "expected_refusal": true,
+      "expected_retrieval_terms": [],
+      "expected_answer_terms": [
+        ["无法回答", "没有找到", "没有可用资料"]
+      ]
+    }
+  ]
+}
