@@ -2,6 +2,9 @@
 # 类可以理解为「创建对象的模板」；这里用它创建整个 API 应用。
 from fastapi import FastAPI
 
+# 注册应用级异常处理器，把模型、数据库和未知异常转换为稳定的 HTTP 响应。
+from app.core.error_handlers import register_error_handlers
+
 # 导入知识库问答路由，提供检索增强生成的最终答案接口。
 from app.api.answer import router as answer_router
 
@@ -20,6 +23,10 @@ app = FastAPI(
     title="Enterprise Knowledge Base RAG API",
     version="0.1.0",
 )
+
+# 路由执行时未处理的服务异常会在 HTTP 边界统一转换；参数校验和主动抛出的
+# HTTPException 仍由 FastAPI 原有处理器负责。
+register_error_handlers(app)
 
 # include_router 会把 documents.py 中定义的接口加入当前应用。
 # 注册后可以访问切片预览和正式入库接口，并在 /docs 中看到 documents 分组。

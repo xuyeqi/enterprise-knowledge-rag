@@ -17,6 +17,7 @@ FastAPI backend for the enterprise knowledge base RAG project.
 - `app/schemas/search.py`：定义知识库向量检索接口的请求和响应结构。
 - `app/schemas/answer.py`：定义知识库问答接口的请求和响应结构。
 - `app/core/config.py`：从 `RAG_POSTGRES_*` 环境变量读取数据库连接配置。
+- `app/core/error_handlers.py`：统一模型、数据库和未知服务异常的 HTTP 状态码与安全提示。
 - `app/db/session.py`：创建 SQLAlchemy 异步引擎和请求级会话，并执行最小数据库查询。
 - `app/db/base.py`：定义所有 SQLAlchemy 数据模型共同继承的基础类。
 - `app/models/document.py`：定义原始文档和 1024 维文档切片模型。
@@ -33,6 +34,7 @@ FastAPI backend for the enterprise knowledge base RAG project.
 - `alembic.ini`：指定 Alembic 的迁移脚本位置和基础行为。
 - `app/__init__.py`：把 `app` 目录标记为 Python 包，方便用 `from app.main import app` 导入。
 - `tests/test_health.py`：使用 FastAPI 测试客户端请求 `/health`，确认接口返回正确。
+- `tests/test_error_handling.py`：模拟模型、数据库和未知异常，确认响应不泄露内部细节。
 - `pyproject.toml`：声明 Python 版本、依赖包和测试配置。
 - `uv.lock`：uv 根据 `pyproject.toml` 解析出来的锁文件，用来固定依赖版本，保证不同机器安装结果尽量一致。
 
@@ -553,3 +555,24 @@ uv run python -m scripts.evaluate_rag --mode tune
 评估集中的关键词组支持同义表达：同一组内命中任意一个词即可，不同组必须全部
 命中。调整问题或关键词时应以知识库原文和真实回答为依据，不能为了让分数通过而
 删除关键事实约束。
+
+## 服务端错误响应
+
+参数校验和文件解析错误继续使用现有的 `4xx` 状态码。请求进入业务链路后，应用
+会在 HTTP 边界统一处理以下运行异常：
+
+- 百炼／OpenAI 兼容 SDK 请求失败，或模型响应无法使用：HTTP `502`。
+- PostgreSQL 连接、查询或事务失败：HTTP `503`。
+- 未分类的内部异常：HTTP `500`。
+
+响应继续使用 FastAPI 标准结构，前端现有请求工具可以直接显示：
+
+```json
+{
+  "detail": "模型服务暂时不可用，请稍后重试。"
+}
+```
+
+接口响应不会输出底层异常文本、API Key、数据库地址或密码；项目主动写入的错误
+日志只记录异常类型。SSE 流式回答开始后无法再修改 HTTP 状态码，因此仍通过
+`error` 事件通知前端中断，并保留已经生成的内容。
