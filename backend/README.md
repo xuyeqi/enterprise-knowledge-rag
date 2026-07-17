@@ -35,6 +35,7 @@ FastAPI backend for the enterprise knowledge base RAG project.
 - `app/__init__.py`：把 `app` 目录标记为 Python 包，方便用 `from app.main import app` 导入。
 - `tests/test_health.py`：使用 FastAPI 测试客户端请求 `/health`，确认接口返回正确。
 - `tests/test_error_handling.py`：模拟模型、数据库和未知异常，确认响应不泄露内部细节。
+- `tests/test_critical_failures.py`：验证入库、检索和问答跨层失败时的状态码与事务边界。
 - `pyproject.toml`：声明 Python 版本、依赖包和测试配置。
 - `uv.lock`：uv 根据 `pyproject.toml` 解析出来的锁文件，用来固定依赖版本，保证不同机器安装结果尽量一致。
 
