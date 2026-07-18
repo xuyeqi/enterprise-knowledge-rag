@@ -96,7 +96,7 @@ export async function askKnowledgeBaseStream(
   query: string,
   history: ConversationMessage[],
   onDelta: (content: string) => void,
-  limit = 1,
+  limit = 3,
 ): Promise<KnowledgeAnswerResponse> {
   const response = await requestResponse("/answer/stream", {
     method: "POST",
