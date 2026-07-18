@@ -52,6 +52,13 @@ dependencies = [
 
     # pypdf 用于从文本型 PDF 中逐页提取内容，并保留引用所需的页码。
     "pypdf>=6.0.0,<7.0.0",
+
+    # redis 是 Redis 官方 Python 客户端，用来连接后台任务队列。
+    "redis>=5.0.0,<7.0.0",
+
+    # RQ 基于 Redis 提供任务状态、失败重试和唯一任务去重。
+    # unique=True 从 2.8 开始提供，因此下限固定为 2.8。
+    "rq>=2.8.0,<3.0.0",
 ]
 
 [project.optional-dependencies]

@@ -677,6 +677,17 @@ textarea {
   margin: 24px 0 0;
 }
 
+.job-note {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  color: #0f766e;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 .result-list > div {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);

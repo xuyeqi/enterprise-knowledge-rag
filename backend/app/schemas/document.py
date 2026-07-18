@@ -6,6 +6,8 @@ Swagger 文档中生成字段说明和示例结构。
 
 # datetime 用于描述数据库记录的带时区创建时间。
 from datetime import datetime
+# Literal 把任务状态限制为前后端约定的五个字符串。
+from typing import Literal
 # UUID 用于描述数据库为文档生成的全局唯一标识符。
 from uuid import UUID
 
@@ -48,6 +50,40 @@ class DocumentIndexResponse(BaseModel):
     filename: str = Field(description="清理路径信息后的原始文件名")
     status: str = Field(description="文档当前处理状态，成功入库时为 indexed")
     chunk_count: int = Field(description="已经写入数据库的切片数量")
+
+
+class DocumentJobCreateResponse(BaseModel):
+    """表示文档已被后台队列接收，但尚未必完成索引。"""
+
+    job_id: str = Field(description="根据文件内容生成的稳定任务 ID")
+    status: Literal["queued", "started", "retrying", "finished", "failed"] = Field(
+        description="任务的当前处理状态"
+    )
+    deduplicated: bool = Field(
+        description="true 表示相同内容已存在，本次未重复入队"
+    )
+
+
+class DocumentJobStatusResponse(BaseModel):
+    """表示前端轮询得到的文档索引任务快照。"""
+
+    job_id: str = Field(description="后台任务 ID")
+    filename: str = Field(description="经过路径清理的上传文件名")
+    status: Literal["queued", "started", "retrying", "finished", "failed"] = Field(
+        description="排队、执行、重试、成功或失败状态"
+    )
+    document_id: str | None = Field(
+        default=None,
+        description="索引成功后生成的数据库文档 ID",
+    )
+    chunk_count: int | None = Field(
+        default=None,
+        description="索引成功后写入的切片数量",
+    )
+    error: str | None = Field(
+        default=None,
+        description="终态失败时返回的安全错误说明",
+    )
 
 
 class DocumentListItem(BaseModel):

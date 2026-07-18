@@ -1,7 +1,7 @@
-"""提供文档列表、TXT／Markdown／PDF 上传预览和正式向量入库接口。
+"""提供文档列表、上传预览、同步入库和异步索引接口。
 
-两个上传接口共用文件名、大小和内容解析校验。列表接口只读取文档摘要；
-预览接口只返回切片；正式接口会调用百炼并把结果写入 PostgreSQL。
+所有上传接口共用文件校验。现有同步接口保留兼容；新异步接口
+把已校验文件交给 Redis + RQ，再由独立 Worker 调用百炼并写入 PostgreSQL。
 """
 
 # dataclass 用来定义只承载数据的小对象，避免在两个接口间传递含义不清的元组。
@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+# RedisError 是 Redis 连接、读写失败的基类，转换后不会泄露内部地址。
+from redis.exceptions import RedisError
 # func 提供 SQL COUNT 聚合；select 用于构造只读文档列表查询。
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,10 +26,17 @@ from app.models.document import Document, DocumentChunk
 from app.schemas.document import (
     ChunkPreview,
     DocumentIndexResponse,
+    DocumentJobCreateResponse,
+    DocumentJobStatusResponse,
     DocumentListItem,
     DocumentPreviewResponse,
 )
 from app.services.document_indexing import index_document
+from app.services.document_jobs import (
+    DocumentJobNotFoundError,
+    enqueue_document_job,
+    get_document_job,
+)
 from app.services.document_parser import (
     DocumentParseError,
     ParsedDocument,
@@ -59,7 +68,9 @@ class ParsedDocumentUpload:
     """
 
     filename: str
+    extension: str
     content_type: str
+    raw_content: bytes
     document: ParsedDocument
 
 
@@ -137,7 +148,9 @@ async def read_and_parse_document_upload(file: UploadFile) -> ParsedDocumentUplo
 
     return ParsedDocumentUpload(
         filename=safe_filename,
+        extension=extension,
         content_type=content_type,
+        raw_content=raw_content,
         document=parsed_document,
     )
 
@@ -255,4 +268,66 @@ async def create_document(
         filename=document.filename,
         status=document.status,
         chunk_count=len(document.chunks),
+    )
+
+
+@router.post(
+    "/jobs",
+    response_model=DocumentJobCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_document_job(
+    file: Annotated[
+        UploadFile,
+        File(description="需要在后台生成向量索引的文档"),
+    ],
+) -> DocumentJobCreateResponse:
+    """校验文件后立即返回任务 ID，索引工作由 RQ Worker 完成。"""
+
+    upload = await read_and_parse_document_upload(file)
+
+    try:
+        job = enqueue_document_job(
+            raw_content=upload.raw_content,
+            extension=upload.extension,
+            filename=upload.filename,
+            content_type=upload.content_type,
+        )
+    except RedisError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="后台任务服务暂时不可用，请稍后重试。",
+        ) from error
+
+    return DocumentJobCreateResponse(
+        job_id=job.job_id,
+        status=job.status,
+        deduplicated=job.deduplicated,
+    )
+
+
+@router.get("/jobs/{job_id}", response_model=DocumentJobStatusResponse)
+async def read_document_job(job_id: str) -> DocumentJobStatusResponse:
+    """返回一个异步文档索引任务的当前状态。"""
+
+    try:
+        job = get_document_job(job_id)
+    except DocumentJobNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="文档索引任务不存在或已过期。",
+        ) from error
+    except RedisError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="后台任务服务暂时不可用，请稍后重试。",
+        ) from error
+
+    return DocumentJobStatusResponse(
+        job_id=job.job_id,
+        filename=job.filename,
+        status=job.status,
+        document_id=job.document_id,
+        chunk_count=job.chunk_count,
+        error=job.error,
     )

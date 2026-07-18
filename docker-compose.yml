@@ -43,6 +43,25 @@ services:
       retries: 10
       start_period: 10s
 
+  # Redis 作为 RQ 的任务队列和短期状态存储。
+  redis:
+    image: redis:7-alpine
+    container_name: langchain-demo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
 volumes:
   # Docker 管理的命名卷，用来在容器重启或重建后保留数据库数据。
   postgres_data:
+
+  # 保留已入队任务和状态，避免 Redis 容器重建后立即丢失。
+  redis_data:

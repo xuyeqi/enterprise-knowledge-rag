@@ -16,8 +16,9 @@
 ## 技术栈
 
 - Frontend：Vue 3 + TypeScript + Vite + Pinia + Vue Router + Element Plus
-- Backend：Python + uv + FastAPI + LangChain
+- Backend：Python + uv + FastAPI + LangChain + RQ
 - Database：PostgreSQL + pgvector
+- Queue：Redis
 - LLM：OpenAI-compatible API
 
 ## 当前状态
@@ -37,14 +38,15 @@
 - 相似度阈值和无相关资料拒答已经接入，并通过后端测试与真实问题验证。
 - 文本型 PDF 解析、逐页切片、页码存储和引用页码展示已经接入，并通过真实链路验证。
 - SSE 流式回答和前端逐块渲染已经接入，并通过后端测试、前端构建和真实链路验证。
+- Redis + RQ 异步文档索引已经接入，支持状态查询、延迟重试和内容去重。
 
 下一步：
 
-- 增加简单 RAG 评估样例，为相似度阈值和回答质量提供可重复的验证依据。
+- 评估是否需要引入 LangGraph 编排问答流程。
 
 ## 本地数据库
 
-本地数据库使用 Docker Compose 启动 PostgreSQL + pgvector。
+本地数据库和任务队列使用 Docker Compose 启动 PostgreSQL + pgvector + Redis。
 
 首次启动前，在项目根目录复制环境变量示例文件：
 
@@ -58,13 +60,13 @@ Copy-Item .env.example .env
 启动数据库：
 
 ```powershell
-docker compose up -d postgres
+docker compose up -d postgres redis
 ```
 
 停止数据库：
 
 ```powershell
-docker compose stop postgres
+docker compose stop postgres redis
 ```
 
 ## 后端启动

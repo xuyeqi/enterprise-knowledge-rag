@@ -197,3 +197,30 @@ def get_chat_settings() -> ChatSettings:
     """创建并缓存应用共用的百炼问答模型配置对象。"""
 
     return ChatSettings()
+
+
+class RedisSettings(BaseSettings):
+    """保存后台文档索引队列的 Redis 连接地址。
+
+    Redis 只保存任务参数、状态和短期结果，不代替 PostgreSQL
+    保存最终的文档和向量。本地默认连接 Docker Compose 对外暴露的
+    6379 端口，需要时可通过 `RAG_REDIS_URL` 覆盖。
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    url: str = Field(
+        default="redis://127.0.0.1:6379/0",
+        validation_alias="RAG_REDIS_URL",
+    )
+
+
+@lru_cache
+def get_redis_settings() -> RedisSettings:
+    """创建并缓存应用共用的 Redis 队列配置对象。"""
+
+    return RedisSettings()

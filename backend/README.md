@@ -359,6 +359,49 @@ ORDER BY d.created_at DESC, dc.chunk_index
 LIMIT 20;
 ```
 
+## Asynchronous Document Indexing
+
+前端默认使用 Redis + RQ 异步索引接口：
+
+```http
+POST /documents/jobs
+Content-Type: multipart/form-data
+
+GET /documents/jobs/{job_id}
+```
+
+`POST /documents/jobs` 只完成文件校验和入队，成功时返回 HTTP `202`。
+RQ Worker 在后台执行解析、切片、向量化和数据库事务。前端每秒读取
+一次状态，直到进入 `finished` 或 `failed`。
+
+任务状态包含：
+
+- `queued`：已入队，等待 Worker。
+- `started`：Worker 正在生成向量并入库。
+- `retrying`：上一次失败，按 10、30、60 秒间隔等待重试。
+- `finished`：索引完成，响应包含文档 ID 和切片数量。
+- `failed`：首次执行和三次重试均失败。
+
+文件内容的 SHA-256 摘要作为稳定任务 ID。相同内容在任务保留的
+24 小时内不会重复入队，因而不会重复产生 embedding 费用。当前文件上限
+为 2 MiB，原始字节作为任务参数短期保存在 Redis；如果未来放开大文件，
+应改为对象存储并只向队列传递文件地址。
+
+先在项目根目录启动 PostgreSQL 和 Redis：
+
+```powershell
+docker compose up -d postgres redis
+```
+
+再打开一个 PowerShell，在 `backend` 目录启动 Windows 兼容的 Worker：
+
+```powershell
+uv run python -m scripts.run_document_worker
+```
+
+Worker 终端需要保持运行。重试使用 RQ 调度器，脚本已通过
+`with_scheduler=True` 启用。同步 `POST /documents` 继续保留，供兼容和单步调试使用。
+
 ## Document List
 
 文档列表接口：
