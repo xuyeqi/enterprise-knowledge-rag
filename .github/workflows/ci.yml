@@ -1,0 +1,82 @@
+# 这个工作流是项目的持续集成入口。
+# 代码推送到 main 或提交面向 main 的 Pull Request 时，GitHub 会并行
+# 运行后端离线测试和前端生产构建，防止未通过验证的代码进入主分支。
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  # workflow_dispatch 允许在 GitHub Actions 页面手动重新运行一次 CI。
+  workflow_dispatch:
+
+# 本工作流只读取代码，不提交、发布或部署任何内容。
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    env:
+      # 告诉 uv 后续同步和运行都使用下面安装的 Python 3.12。
+      UV_PYTHON: "3.12"
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      # checkout 把当前提交的代码下载到 GitHub 提供的临时 Linux 机器。
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # setup-uv 是 uv 官方推荐的 GitHub Action。第三方 Action 固定到
+      # v8.1.0 的完整提交 SHA，避免同名标签被替换后执行未审核代码。
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.29"
+          enable-cache: true
+
+      # Python 3.12 满足项目 >=3.11 的声明，固定版本可保证每次 CI 环境一致。
+      - name: Install Python
+        run: uv python install 3.12
+
+      # --locked 禁止 CI 临时改写 uv.lock；声明与锁文件不一致时直接失败。
+      - name: Install backend dependencies
+        run: uv sync --locked --extra dev
+
+      # 当前 pytest 使用测试替身，不访问 PostgreSQL、Redis 或百炼，不需要真实密钥。
+      - name: Run backend tests
+        run: uv run pytest
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # Node 22.12.0 是 package.json 声明的可用版本；setup-node 同时按锁文件
+      # 缓存 npm 下载目录，但不缓存 node_modules。
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.12.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci 严格按 package-lock.json 安装，不会在 CI 中重新解析并改写依赖版本。
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # build 同时执行 vue-tsc 类型检查和 Vite 生产构建。
+      - name: Build frontend
+        run: npm run build

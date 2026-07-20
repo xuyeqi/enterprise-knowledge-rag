@@ -80,7 +80,7 @@
 ├── docker-compose.yml
 ├── README.md
 ├── ROADMAP.md
-└── CLAUDE.md
+└── AGENTS.md
 ```
 
 ### CI 目录与运行约定

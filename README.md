@@ -20,6 +20,7 @@
 - Database：PostgreSQL + pgvector
 - Queue：Redis
 - LLM：OpenAI-compatible API
+- CI：GitHub Actions
 
 ## 当前状态
 
@@ -42,7 +43,20 @@
 
 下一步：
 
-- 评估是否需要引入 LangGraph 编排问答流程。
+- 将仓库推送到 GitHub，验证首次 CI 后端测试和前端构建。
+
+## 持续集成
+
+GitHub Actions 工作流位于 `.github/workflows/ci.yml`。代码推送到
+`main` 或提交面向 `main` 的 Pull Request 时，会并行执行：
+
+- Backend tests：使用 Python 3.12 和 uv 锁文件安装依赖，运行 `uv run pytest`。
+- Frontend build：使用 Node.js 22.12.0 和 `npm ci` 安装依赖，运行
+  `npm run build`。
+
+CI 只有仓库读权限，不部署项目，也不连接真实 PostgreSQL、Redis 或
+百炼 API。第一次推送后，在 GitHub 仓库的 Actions 页面确认
+`Backend tests` 和 `Frontend build` 均通过。
 
 ## 本地数据库
 
