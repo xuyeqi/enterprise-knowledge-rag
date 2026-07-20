@@ -42,6 +42,9 @@
 - 2026-07-18：将前端流式问答默认 Top-K 从 `1` 调整为评估确认的 `3`；用户确认 `npm run build` 通过。
 - 2026-07-18：完成 Redis + RQ 异步文档索引，包含任务状态查询、三次延迟
   重试、SHA-256 内容去重、Windows SpawnWorker 和前端轮询；用户确认验证完成。
+- 2026-07-20：完成 GitHub Actions CI；修复 TypeScript 7 与 `vue-tsc`
+  的兼容问题后，GitHub Runner 上的 `Backend tests` 和 `Frontend build`
+  均验证通过。
 
 ## 进行中
 
@@ -55,15 +58,11 @@
 - SSE 流式回答、前端逐块渲染和最新回答展示已经完成并通过验证。
 - Redis + RQ 异步文档索引、任务状态、失败重试、内容去重和前端轮询
   已经完成并通过验证。
-- GitHub Actions CI 已完成首次运行：后端测试通过，前端构建因
-  TypeScript 7 与 `vue-tsc` 不兼容而失败；依赖兼容修复已通过本地构建，
-  正在等待推送后重新验证。
 
 ## 待办
 
 ### 阶段 5：简历亮点增强
 
-- 将本地仓库关联到 GitHub，确认 `Backend tests` 和 `Frontend build` 首次 CI 均通过。
 - 视情况引入 LangGraph 编排问答流程。
 
 ## 阻塞
@@ -72,6 +71,8 @@
 
 ## 最近验证
 
+- 2026-07-20：提交 `0ff604e` 触发 GitHub Actions CI；GitHub Runner 上的
+  `Backend tests` 和 `Frontend build` 均执行成功，CI 接入正式完成。
 - 2026-07-20：首次 GitHub Actions CI 的 `Backend tests` 通过，
   `Frontend build` 因 TypeScript 7 未导出 `typescript/lib/tsc` 而失败；
   已将 TypeScript 精确固定为 `6.0.3`，用户确认 `npm run build` 通过，
